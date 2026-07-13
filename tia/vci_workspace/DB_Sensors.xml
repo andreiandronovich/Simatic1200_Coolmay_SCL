@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V18" />
+  <SW.Blocks.InstanceDB ID="0">
+    <AttributeList>
+      <InstanceOfName>FB_Sensors</InstanceOfName>
+      <InstanceOfType>FB</InstanceOfType>
+      <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+  <Section Name="Input" />
+  <Section Name="Output" />
+  <Section Name="InOut" />
+  <Section Name="Static">
+    <Member Name="voltage_HL" Datatype="Real" />
+    <Member Name="voltage_LL" Datatype="Real" />
+    <Member Name="distance_HL" Datatype="Real" />
+    <Member Name="distance_LL" Datatype="Real" />
+    <Member Name="analogValue" Datatype="Int" />
+    <Member Name="voltageOutput" Datatype="Real" />
+    <Member Name="distanceOutput" Datatype="Real" />
+    <Member Name="timeDelay" Datatype="Time" />
+    <Member Name="timer" Datatype="TP_TIME" Version="1.0" />
+    <Member Name="trig" Datatype="R_TRIG" Version="1.0" />
+    <Member Name="startCond" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="state" Datatype="Bool" />
+  </Section>
+</Sections></Interface>
+      <Name>DB_Sensors</Name>
+      <Namespace />
+      <Number>11</Number>
+      <ProgrammingLanguage>DB</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="1" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="2" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <MultilingualText ID="3" CompositionName="Title">
+        <ObjectList>
+          <MultilingualTextItem ID="4" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Blocks.InstanceDB>
+</Document>

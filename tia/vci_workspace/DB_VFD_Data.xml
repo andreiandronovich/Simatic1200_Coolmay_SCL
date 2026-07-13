@@ -1,0 +1,83 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V18" />
+  <SW.Blocks.GlobalDB ID="0">
+    <AttributeList>
+      <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+  <Section Name="Static">
+    <Member Name="ReadRegs" Datatype="Array[0..15] of Word" />
+    <Member Name="forward" Datatype="Bool" />
+    <Member Name="revers" Datatype="Bool" />
+    <Member Name="stop" Datatype="Bool" />
+    <Member Name="setFrequency" Datatype="Real">
+      <Comment>
+        <MultiLanguageText Lang="en-US">0020h - 40033</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="outputFrequency" Datatype="Real">
+      <Comment>
+        <MultiLanguageText Lang="en-US">0021h - 40034 actual</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="outputCurrent" Datatype="Real">
+      <Comment>
+        <MultiLanguageText Lang="en-US">0022h - 40035</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="outputVoltage" Datatype="Real">
+      <Comment>
+        <MultiLanguageText Lang="en-US">0025h - 40038</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="voltageZPT" Datatype="Int">
+      <Comment>
+        <MultiLanguageText Lang="en-US">0026h - 40039</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="statusInputTerminals" Datatype="Int">
+      <Comment>
+        <MultiLanguageText Lang="en-US">0029h - 40042</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="commands" Datatype="Int">
+      <Comment>
+        <MultiLanguageText Lang="en-US">0000h - 40001</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="settingFrequency" Datatype="Int">
+      <Comment>
+        <MultiLanguageText Lang="en-US">0001h - 40002</MultiLanguageText>
+      </Comment>
+    </Member>
+  </Section>
+</Sections></Interface>
+      <MemoryLayout>Standard</MemoryLayout>
+      <Name>DB_VFD_Data</Name>
+      <Namespace />
+      <Number>8</Number>
+      <ProgrammingLanguage>DB</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="1" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="2" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <MultilingualText ID="3" CompositionName="Title">
+        <ObjectList>
+          <MultilingualTextItem ID="4" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Blocks.GlobalDB>
+</Document>

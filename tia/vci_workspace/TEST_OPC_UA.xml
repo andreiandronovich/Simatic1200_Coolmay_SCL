@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V18" />
+  <SW.Blocks.GlobalDB ID="0">
+    <AttributeList>
+      <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+  <Section Name="Static">
+    <Member Name="Static_1TESTGIT" Datatype="Real">
+      <StartValue>1.0</StartValue>
+    </Member>
+    <Member Name="TEMP_1" Datatype="Real">
+      <StartValue>2.0</StartValue>
+    </Member>
+    <Member Name="TEMP_2" Datatype="Real">
+      <StartValue>3.0</StartValue>
+    </Member>
+    <Member Name="TEMP_3" Datatype="Real">
+      <StartValue>4.0</StartValue>
+    </Member>
+    <Member Name="TEMP_4" Datatype="Real">
+      <StartValue>5.0</StartValue>
+    </Member>
+    <Member Name="TEMP_5" Datatype="Real">
+      <StartValue>6.0</StartValue>
+    </Member>
+    <Member Name="TEMP_6" Datatype="Real">
+      <StartValue>7.0</StartValue>
+    </Member>
+  </Section>
+</Sections></Interface>
+      <MemoryLayout>Optimized</MemoryLayout>
+      <MemoryReserve>100</MemoryReserve>
+      <Name>TEST_OPC_UA</Name>
+      <Namespace />
+      <Number>3</Number>
+      <ProgrammingLanguage>DB</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="1" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="2" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <MultilingualText ID="3" CompositionName="Title">
+        <ObjectList>
+          <MultilingualTextItem ID="4" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Blocks.GlobalDB>
+</Document>

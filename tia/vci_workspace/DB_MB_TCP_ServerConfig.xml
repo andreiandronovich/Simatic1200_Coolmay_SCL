@@ -1,0 +1,117 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V18" />
+  <SW.Blocks.GlobalDB ID="0">
+    <AttributeList>
+      <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+  <Section Name="Static">
+    <Member Name="Connect" Datatype="TCON_IP_v4" Version="1.0" Remanence="Retain">
+      <Sections>
+        <Section Name="None">
+          <Member Name="InterfaceId" Datatype="HW_ANY">
+            <StartValue>64</StartValue>
+          </Member>
+          <Member Name="ID" Datatype="CONN_OUC">
+            <StartValue>1</StartValue>
+          </Member>
+          <Member Name="ConnectionType" Datatype="Byte">
+            <StartValue>11</StartValue>
+          </Member>
+          <Member Name="RemoteAddress" Datatype="IP_V4" Version="1.0">
+            <Sections>
+              <Section Name="None">
+                <Member Name="ADDR" Datatype="Array[1..4] of Byte">
+                  <Subelement Path="1">
+                    <StartValue>0</StartValue>
+                  </Subelement>
+                  <Subelement Path="2">
+                    <StartValue>0</StartValue>
+                  </Subelement>
+                  <Subelement Path="3">
+                    <StartValue>0</StartValue>
+                  </Subelement>
+                  <Subelement Path="4">
+                    <StartValue>0</StartValue>
+                  </Subelement>
+                </Member>
+              </Section>
+            </Sections>
+          </Member>
+          <Member Name="LocalPort" Datatype="UInt">
+            <StartValue>502</StartValue>
+          </Member>
+        </Section>
+      </Sections>
+    </Member>
+    <Member Name="MB_Disconnect" Datatype="Bool" Remanence="Retain" />
+    <Member Name="MB_NDR" Datatype="Bool" Remanence="Retain" />
+    <Member Name="MB_DR" Datatype="Bool" Remanence="Retain" />
+    <Member Name="MB_Error" Datatype="Bool" Remanence="Retain" />
+    <Member Name="MB_Status" Datatype="Word" Remanence="Retain" />
+    <Member Name="HoldingReg" Datatype="Array[0..20] of Word" Remanence="Retain">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+      <Subelement Path="0">
+        <Comment>
+          <MultiLanguageText Lang="en-US">MotorOn_Cmd (0=Stop, &lt;&gt;0=Start)</MultiLanguageText>
+        </Comment>
+      </Subelement>
+      <Subelement Path="1">
+        <Comment>
+          <MultiLanguageText Lang="en-US">SetFrequency_Hold</MultiLanguageText>
+        </Comment>
+      </Subelement>
+      <Subelement Path="2">
+        <Comment>
+          <MultiLanguageText Lang="en-US">FrequencyAct_Hold</MultiLanguageText>
+        </Comment>
+      </Subelement>
+      <Subelement Path="3">
+        <Comment>
+          <MultiLanguageText Lang="en-US">MinValueClamp</MultiLanguageText>
+        </Comment>
+      </Subelement>
+      <Subelement Path="4">
+        <Comment>
+          <MultiLanguageText Lang="en-US">MaxValueClamp</MultiLanguageText>
+        </Comment>
+      </Subelement>
+      <Subelement Path="5">
+        <Comment>
+          <MultiLanguageText Lang="en-US">frequencySource (Выбор источника задания частоты)</MultiLanguageText>
+        </Comment>
+      </Subelement>
+    </Member>
+  </Section>
+</Sections></Interface>
+      <MemoryLayout>Standard</MemoryLayout>
+      <Name>DB_MB_TCP_ServerConfig</Name>
+      <Namespace />
+      <Number>6</Number>
+      <ProgrammingLanguage>DB</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="1" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="2" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <MultilingualText ID="3" CompositionName="Title">
+        <ObjectList>
+          <MultilingualTextItem ID="4" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Blocks.GlobalDB>
+</Document>

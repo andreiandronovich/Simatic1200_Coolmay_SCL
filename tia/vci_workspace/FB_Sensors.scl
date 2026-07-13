@@ -1,0 +1,55 @@
+﻿FUNCTION_BLOCK "FB_Sensors"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR 
+      voltage_HL : Real := 10.0;
+      voltage_LL : Real := 0.0;
+      distance_HL : Real := 1000.0;
+      distance_LL : Real := 100.0;
+      analogValue : Int;
+      voltageOutput : Real;
+      distanceOutput : Real;
+      timeDelay : Time;
+      "timer" {InstructionName := 'TP_TIME'; LibVersion := '1.0'; S7_SetPoint := 'False'} : TP_TIME;
+      trig {InstructionName := 'R_TRIG'; LibVersion := '1.0'; S7_SetPoint := 'False'} : R_TRIG;
+      startCond { S7_SetPoint := 'True'} : Bool;
+      state : Bool := true;
+   END_VAR
+
+
+BEGIN
+	#analogValue := "analogInput_1";
+	// напряжение 
+	#voltageOutput := #analogValue * ((#voltage_HL - #voltage_LL) / 27648) + #voltage_LL;
+	//Растояние 
+	#distanceOutput := #analogValue * ((#distance_HL - #distance_LL) / 27648) + #distance_LL;
+	
+	
+	
+	IF "DB_HMI_Data".sensorOn THEN
+	    #startCond :=
+	    (#distanceOutput > 300.0) AND
+	    (#distanceOutput < 500.0) AND
+	    (NOT "DB_VFD_Data".forward) AND
+	    (NOT "DB_VFD_Data".revers);
+	    
+	    #trig(CLK := #startCond);
+	    #timer(
+	           IN := #trig.Q,
+	           PT := #timeDelay
+	    );
+	    IF #trig.Q AND #state THEN
+	        "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 := 1;
+	        "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	        #state := false;
+	    END_IF;
+	    
+	    IF #timer.ET = #timer.PT AND NOT #state THEN
+	        "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 := 0;
+	        "DB_MB_TCP_ServerConfig".HoldingReg[0].%X8 := 1;
+	        "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	        #state := true;
+	    END_IF;
+	END_IF;
+END_FUNCTION_BLOCK
+

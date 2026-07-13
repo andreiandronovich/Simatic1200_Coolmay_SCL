@@ -1,0 +1,125 @@
+﻿FUNCTION "FC_ModbusMaster" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+
+BEGIN
+	
+	// 1. Если блок свободен и нет активного запроса,
+	//    выбираем шаг и сразу поднимаем REQ
+	
+	IF NOT "DB_MB_RTU_MasterConfig".BUSY
+	    AND NOT "DB_MB_RTU_MasterConfig".REQ THEN
+	    
+	    // Берём запрос из StepRequest
+	    "DB_MB_RTU_MasterConfig".Step := "DB_MB_RTU_MasterConfig".StepRequest;
+	    
+	    CASE "DB_MB_RTU_MasterConfig".Step OF
+	            
+	        0://чтение Регистров параметров монитора (0020h - 0029h)
+	            "DB_MB_RTU_MasterConfig".MODE := 0;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40033;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 10;
+	        1://чтение регистров команд (регистр 0000h и 0001h) 
+	            "DB_MB_RTU_MasterConfig".MODE := 0;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 2;
+	        2:// включение/выключение двигателя (запись в регистр 0000h значение 1)
+	            "DB_MB_RTU_MasterConfig".MODE := 1;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
+	            "DB_VFD_Data".ReadRegs[0] := "DB_MB_TCP_ServerConfig".HoldingReg[0]; // MotorOn_Cmd (0=Stop, <>0=Start)
+	            
+	           // Измениеть предыдущую строку на присваивание значение из таблицы "DB_HMI_Data".MotorOn, А не из холдинг регистра
+	        
+	        3:// задание частоты (запись в регистр 0001h )
+	            "DB_MB_RTU_MasterConfig".MODE := 1;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40002;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
+	            "DB_VFD_Data".ReadRegs[0] := INT_TO_WORD(REAL_TO_INT(("DB_HMI_Data".frequencySetpoint)*100));
+	        4:// выбор источника задания частоты (запись в регистр 2101h)
+	            "DB_MB_RTU_MasterConfig".MODE := 1;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 48450;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
+	            "DB_VFD_Data".ReadRegs[0] := "DB_MB_TCP_ServerConfig".HoldingReg[5];
+	        5:// (запись в регистр )
+	            "DB_MB_RTU_MasterConfig".MODE := 1;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 48450;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
+	            "DB_VFD_Data".ReadRegs[0] := "DB_MB_TCP_ServerConfig".HoldingReg[5];
+	            
+	            
+	        ELSE
+	            "DB_MB_RTU_MasterConfig".Step := 0;   // защита
+	    END_CASE;
+	    
+	    // Старт запроса
+	    "DB_MB_RTU_MasterConfig".REQ := TRUE;
+	END_IF;
+	
+	// Завершение запроса (успешно)
+	IF "DB_MB_RTU_MasterConfig".DONE THEN
+	    "DB_MB_RTU_MasterConfig".REQ := FALSE;
+	    
+	     // Запись значений регистров парамтров мониторинга в таблицу "DB_VFD_Data"
+	    CASE "DB_MB_RTU_MasterConfig".Step OF
+	        0:  // Считываем
+	            "DB_VFD_Data".setFrequency := (INT_TO_REAL(WORD_TO_INT("DB_VFD_Data".ReadRegs[0]))) / 100;
+	            "DB_VFD_Data".outputFrequency := (INT_TO_REAL(WORD_TO_INT("DB_VFD_Data".ReadRegs[1]))) / 100;
+	            "DB_VFD_Data".outputCurrent := (INT_TO_REAL(WORD_TO_INT("DB_VFD_Data".ReadRegs[2]))) / 10;
+	            "DB_VFD_Data".outputVoltage := (INT_TO_REAL(WORD_TO_INT("DB_VFD_Data".ReadRegs[5]))) / 10;
+	            "DB_VFD_Data".voltageZPT := WORD_TO_INT("DB_VFD_Data".ReadRegs[6]);
+	            "DB_VFD_Data".statusInputTerminals := WORD_TO_INT("DB_VFD_Data".ReadRegs[9]);
+	            
+	            
+	        1:  // читали 2 регистра другого типа
+	            "DB_VFD_Data".commands := WORD_TO_INT("DB_VFD_Data".ReadRegs[0]);
+	            "DB_VFD_Data".forward := "DB_VFD_Data".ReadRegs[0].%X0;
+	            "DB_VFD_Data".revers := "DB_VFD_Data".ReadRegs[0].%X1;
+	            IF "DB_VFD_Data".forward = false AND "DB_VFD_Data".revers = false THEN
+	                "DB_VFD_Data".stop := true;
+	            ELSE
+	                "DB_VFD_Data".stop := FALSE;
+	            END_IF;
+	            "DB_VFD_Data".settingFrequency := WORD_TO_INT("DB_VFD_Data".ReadRegs[1]);
+	            
+	    END_CASE;
+	    
+	
+	    // case 1 -> 0 -> 1 -> 0 ->...
+	    IF "DB_MB_RTU_MasterConfig".Step >= 1 THEN
+	        IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
+	            "DB_MB_RTU_MasterConfig".StepRequest := 0;
+	        END_IF;
+	    ELSE
+	        IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
+	            "DB_MB_RTU_MasterConfig".StepRequest := "DB_MB_RTU_MasterConfig".Step + 1;
+	        END_IF;
+	    END_IF;
+	    
+	 
+	END_IF;
+	
+	// Ошибка
+	IF "DB_MB_RTU_MasterConfig".ERROR THEN
+	    "DB_MB_RTU_MasterConfig".REQ := FALSE;
+	    "DB_MB_RTU_MasterConfig".StepRequest := 0;   // на всякий случай
+	END_IF;
+	
+	
+	// формирование, отправка и прием запроса 
+	"MB_MASTER_DB"(
+	               REQ := "DB_MB_RTU_MasterConfig".REQ,
+	               MB_ADDR := "DB_MB_RTU_MasterConfig".MB_ADDR,
+	               MODE := "DB_MB_RTU_MasterConfig".MODE,
+	               DATA_ADDR := "DB_MB_RTU_MasterConfig".DATA_ADDR,
+	               DATA_LEN := "DB_MB_RTU_MasterConfig".DATA_LEN,
+	               DONE => "DB_MB_RTU_MasterConfig".DONE,
+	               BUSY => "DB_MB_RTU_MasterConfig".BUSY,
+	               ERROR => "DB_MB_RTU_MasterConfig".ERROR,
+	               STATUS => "DB_MB_RTU_MasterConfig".STATUS,
+	               DATA_PTR := "DB_VFD_Data".ReadRegs
+	);
+	
+	
+END_FUNCTION
+

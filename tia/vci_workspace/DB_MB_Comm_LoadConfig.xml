@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V18" />
+  <SW.Blocks.GlobalDB ID="0">
+    <AttributeList>
+      <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+  <Section Name="Static">
+    <Member Name="BAUD" Datatype="UDInt">
+      <StartValue>9600</StartValue>
+    </Member>
+    <Member Name="PARITY" Datatype="UInt" />
+    <Member Name="FLOW_CTRL" Datatype="UInt" />
+    <Member Name="RTS_ON_DLY" Datatype="UInt" />
+    <Member Name="RTS_OFF_DLY" Datatype="UInt" />
+    <Member Name="RESP_TO" Datatype="UInt">
+      <StartValue>1000</StartValue>
+    </Member>
+    <Member Name="DONE" Datatype="Bool" />
+    <Member Name="ERROR" Datatype="Bool" />
+    <Member Name="STATUS" Datatype="Word" />
+  </Section>
+</Sections></Interface>
+      <MemoryLayout>Optimized</MemoryLayout>
+      <MemoryReserve>0</MemoryReserve>
+      <Name>DB_MB_Comm_LoadConfig</Name>
+      <Namespace />
+      <Number>5</Number>
+      <ProgrammingLanguage>DB</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="1" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="2" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <MultilingualText ID="3" CompositionName="Title">
+        <ObjectList>
+          <MultilingualTextItem ID="4" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Blocks.GlobalDB>
+</Document>

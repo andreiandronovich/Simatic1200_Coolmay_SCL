@@ -1,0 +1,17 @@
+﻿FUNCTION "FC_ModbusSrv" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+
+BEGIN
+	"MB_SERVER_DB"(DISCONNECT := "DB_MB_TCP_ServerConfig".MB_Disconnect,
+	               NDR => "DB_MB_TCP_ServerConfig".MB_NDR,
+	               DR => "DB_MB_TCP_ServerConfig".MB_DR,
+	               ERROR => "DB_MB_TCP_ServerConfig".MB_Error,
+	               STATUS => "DB_MB_TCP_ServerConfig".MB_Status,
+	               MB_HOLD_REG := "DB_MB_TCP_ServerConfig".HoldingReg,
+	               CONNECT := "DB_MB_TCP_ServerConfig".Connect);
+	
+	
+	
+END_FUNCTION
+

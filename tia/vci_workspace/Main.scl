@@ -1,0 +1,26 @@
+﻿ORGANIZATION_BLOCK "Main"
+TITLE = "Main Program Sweep (Cycle)"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+
+BEGIN
+	    
+	"MB_COMM_LOAD_DB"(
+	                  REQ:= NOT "DB_MB_Comm_LoadConfig".DONE AND NOT "DB_MB_Comm_LoadConfig".ERROR,
+	                  "PORT":="Local~CM_1241_(RS422_485)_1",
+	                  BAUD:="DB_MB_Comm_LoadConfig".BAUD,
+	                  PARITY:="DB_MB_Comm_LoadConfig".PARITY,
+	                  FLOW_CTRL:="DB_MB_Comm_LoadConfig".FLOW_CTRL,
+	                  RTS_ON_DLY:="DB_MB_Comm_LoadConfig".RTS_ON_DLY,
+	                  RTS_OFF_DLY:="DB_MB_Comm_LoadConfig".RTS_OFF_DLY,
+	                  RESP_TO:="DB_MB_Comm_LoadConfig".RESP_TO,
+	                  DONE=>"DB_MB_Comm_LoadConfig".DONE,
+	                  ERROR=>"DB_MB_Comm_LoadConfig".ERROR,
+	                  STATUS=>"DB_MB_Comm_LoadConfig".STATUS,
+	                  MB_DB:="MB_MASTER_DB");
+	
+	"DB_App"();
+	
+	
+END_ORGANIZATION_BLOCK
+

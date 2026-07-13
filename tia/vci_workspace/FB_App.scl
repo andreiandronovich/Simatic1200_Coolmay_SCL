@@ -1,0 +1,115 @@
+﻿FUNCTION_BLOCK "FB_App"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR 
+      frequencySource_Last : Int;
+      frequencySetpoint_Last : Real;
+      state_start : Bool := true;
+      state_rev : Bool := true;
+      state_stop : Bool := true;
+   END_VAR
+
+
+BEGIN
+	
+	"FC_ModbusSrv"();
+	"FC_ModbusMaster"();
+	"DB_Sensors"();
+	
+	
+	// ПУСК РЕВЕРС СТОП. Можно добавить условие, если все флаги равны false, то поставить все флаги в true. Ну или хотя бы флаг стоп
+	IF #state_start = false AND #state_rev = false AND #state_stop = false THEN
+	    #state_start := true;
+	    #state_rev := true;
+	    #state_stop := true;
+	END_IF;
+	    IF "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 = 1 AND #state_start = TRUE THEN
+	    #state_start := false;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X1 := false;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X8 := false;
+	    "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	    #state_rev := true;
+	    #state_stop := true;
+	    "DB_HMI_Data".motorForwardOn := true;
+	    "DB_HMI_Data".motorReversOn := false;
+	    "DB_HMI_Data".motorStop := false;
+	END_IF;
+	IF "DB_MB_TCP_ServerConfig".HoldingReg[0].%X1 = 1 AND #state_rev = TRUE THEN
+	    #state_rev := FALSE;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 := false;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X8 := false;
+	    "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	    #state_start := TRUE;
+	    #state_stop := true;
+	    "DB_HMI_Data".motorForwardOn := FALSE;
+	    "DB_HMI_Data".motorReversOn := true;
+	    "DB_HMI_Data".motorStop := false;
+	END_IF;
+	IF "DB_MB_TCP_ServerConfig".HoldingReg[0].%X8 = 1 AND #state_stop = TRUE THEN
+	    #state_stop := false;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 := false;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X1 := false;
+	    "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	    #state_start := TRUE;
+	    #state_rev := true;
+	    "DB_HMI_Data".motorForwardOn := false;
+	    "DB_HMI_Data".motorReversOn := false;
+	    "DB_HMI_Data".motorStop := true;
+	END_IF;
+	
+	
+	// УСТАВКА ЧАСТОТЫ
+	// REAL -> два holding-регистра [1] и [2]
+	"DB_HMI_Data".frequencySetpoint := DWORD_TO_REAL(SHL(IN := WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[1]), N := 16) OR
+	                                                 WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[2]));
+	IF "DB_HMI_Data".frequencySetpoint <> #frequencySetpoint_Last THEN
+	    "DB_MB_RTU_MasterConfig".StepRequest := 3;
+	    #frequencySetpoint_Last := "DB_HMI_Data".frequencySetpoint;
+	END_IF;
+	
+	// АКТУАЛЬНАЯ ЧАСТОТА
+	// REAL -> два holding-регистра [3] и [4]
+	"DB_MB_TCP_ServerConfig".HoldingReg[3] :=
+	DWORD_TO_WORD(SHR(IN := REAL_TO_DWORD("DB_VFD_Data".outputFrequency), N:= 16));     // high word
+	"DB_MB_TCP_ServerConfig".HoldingReg[4] :=
+	DWORD_TO_WORD(REAL_TO_DWORD("DB_VFD_Data".outputFrequency) AND 16#FFFF);     // low word
+	"DB_HMI_Data".frequencyActual := "DB_VFD_Data".outputFrequency;
+	
+	
+	// ВЫБОР ИСТОЧНИКА ЗАДАНИЯ ЧАСТОТЫ
+	// Int ->holding-регистр [5]
+	"DB_HMI_Data".frequencySource := WORD_TO_INT("DB_MB_TCP_ServerConfig".HoldingReg[5]);
+	IF "DB_HMI_Data".frequencySource <> #frequencySource_Last THEN
+	    "DB_MB_RTU_MasterConfig".StepRequest := 4;
+	    #frequencySource_Last := "DB_HMI_Data".frequencySource;
+	END_IF;
+	
+	// ТОК
+	// REAL -> Два holding-регистра [6] [7]
+	"DB_MB_TCP_ServerConfig".HoldingReg[6] :=
+	DWORD_TO_WORD(SHR(IN := REAL_TO_DWORD("DB_VFD_Data".outputCurrent), N:=16));
+	"DB_MB_TCP_ServerConfig".HoldingReg[7] :=
+	DWORD_TO_WORD(REAL_TO_DWORD("DB_VFD_Data".outputCurrent) AND 16#FFFF);
+	"DB_HMI_Data".currentOut := "DB_VFD_Data".outputCurrent;
+	
+	// ВЫХОДНОЕ НАПРЯЖКНИЕ
+	// Real -> Два holding-регистра [8] и [9]
+	"DB_MB_TCP_ServerConfig".HoldingReg[8] :=
+	DWORD_TO_WORD(SHR(IN := REAL_TO_DWORD("DB_VFD_Data".outputVoltage), N := 16));
+	"DB_MB_TCP_ServerConfig".HoldingReg[9] :=
+	DWORD_TO_WORD(REAL_TO_DWORD("DB_VFD_Data".outputVoltage) AND 16#FFFF);
+	"DB_HMI_Data".voltageOut := "DB_VFD_Data".outputVoltage;
+	
+	// ВКЛ/ВЫКЛ ДАТЧИК holding-регистра [10] использую только 0 бит. Остальные в резерве 
+	"DB_HMI_Data".sensorOn := "DB_MB_TCP_ServerConfig".HoldingReg[10].%X0;
+	
+	// ВРЕМЯ РАБОТЫ ДВИГАТЕЛЯ ПРИ СРАБАТЫВАНИИ ДАТЧИКА 
+	//  holding-регистра [11] и [12]
+	"DB_HMI_Data".timerDelayMotorSensorsOn := INT_TO_TIME(REAL_TO_INT((DWORD_TO_REAL(SHL(IN := WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[11]), N := 16) OR
+	                                                        WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[12])))*1000));
+	"DB_Sensors".timeDelay := "DB_HMI_Data".timerDelayMotorSensorsOn;
+	
+	
+	
+END_FUNCTION_BLOCK
+
