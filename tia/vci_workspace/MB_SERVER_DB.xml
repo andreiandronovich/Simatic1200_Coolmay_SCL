@@ -1,0 +1,143 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V18" />
+  <SW.Blocks.InstanceDB ID="0">
+    <AttributeList>
+      <InstanceOfName>MB_SERVER</InstanceOfName>
+      <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+  <Section Name="Input">
+    <Member Name="DISCONNECT" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+    </Member>
+  </Section>
+  <Section Name="Output">
+    <Member Name="NDR" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="DR" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="ERROR" Datatype="Bool">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="STATUS" Datatype="Word">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+    </Member>
+  </Section>
+  <Section Name="InOut">
+    <Member Name="MB_HOLD_REG" Datatype="Variant" />
+    <Member Name="CONNECT" Datatype="Variant" />
+  </Section>
+  <Section Name="Static">
+    <Member Name="TCON" Datatype="TCON" Version="4.0">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="TSEND" Datatype="TSEND" Version="4.0">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="TRCV" Datatype="TRCV" Version="4.0">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="TDIAG" Datatype="T_DIAG" Version="1.2">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="TRESET" Datatype="T_RESET" Version="1.2">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="TDISCON" Datatype="TDISCON" Version="2.1">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="TDIAG_Status" Datatype="TDiag_Status" Version="1.0">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="HR_Start_Offset" Datatype="Word" />
+    <Member Name="QB_Start" Datatype="UInt" />
+    <Member Name="QB_Count" Datatype="UInt" />
+    <Member Name="QB_Read_Start" Datatype="UInt" />
+    <Member Name="QB_Read_Count" Datatype="UInt" />
+    <Member Name="IB_Read_Start" Datatype="UInt" />
+    <Member Name="IB_Read_Count" Datatype="UInt" />
+    <Member Name="Success_Count" Datatype="Word" />
+    <Member Name="Request_Count" Datatype="Word" />
+    <Member Name="Xmt_Rcv_Count" Datatype="Word" />
+    <Member Name="Server_Message_Count" Datatype="Word" />
+    <Member Name="Exception_Count" Datatype="Word" />
+    <Member Name="Connected" Datatype="Bool" />
+    <Member Name="Connection_ID" Datatype="Word">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="MB_State" Datatype="Word" />
+    <Member Name="TEMP_DATA" Datatype="Array[0..262] of Byte">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="Data_Area_Array" Datatype="Array[1..8] of MB_DataArea" Version="1.0">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="NDR_immediate" Datatype="Bool" />
+    <Member Name="DR_immediate" Datatype="Bool" />
+    <Member Name="BytesReceived" Datatype="UDInt" />
+    <Member Name="overflow_buffer" Datatype="Array[0..262] of Byte" />
+    <Member Name="overflow_size_bytes" Datatype="UInt" />
+  </Section>
+</Sections></Interface>
+      <Name>MB_SERVER_DB</Name>
+      <Namespace />
+      <Number>4</Number>
+      <OfSystemLibElement>MB_SERVER</OfSystemLibElement>
+      <OfSystemLibVersion>5.3</OfSystemLibVersion>
+      <ProgrammingLanguage>DB</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="1" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="2" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <MultilingualText ID="3" CompositionName="Title">
+        <ObjectList>
+          <MultilingualTextItem ID="4" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Blocks.InstanceDB>
+</Document>

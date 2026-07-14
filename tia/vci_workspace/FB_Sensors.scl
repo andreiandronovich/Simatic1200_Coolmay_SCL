@@ -40,14 +40,14 @@ BEGIN
 	    );
 	    IF #trig.Q AND #state THEN
 	        "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 := 1;
-	        "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	        "DB_MB_RTU_MasterConfig".StepRequest := "WriteMotorOnOff";
 	        #state := false;
 	    END_IF;
 	    
 	    IF #timer.ET = #timer.PT AND NOT #state THEN
 	        "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 := 0;
 	        "DB_MB_TCP_ServerConfig".HoldingReg[0].%X8 := 1;
-	        "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	        "DB_MB_RTU_MasterConfig".StepRequest := "WriteMotorOnOff";
 	        #state := true;
 	    END_IF;
 	END_IF;

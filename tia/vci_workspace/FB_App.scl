@@ -27,7 +27,7 @@ BEGIN
 	    #state_start := false;
 	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X1 := false;
 	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X8 := false;
-	    "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	    "DB_MB_RTU_MasterConfig".StepRequest := "WriteMotorOnOff";
 	    #state_rev := true;
 	    #state_stop := true;
 	    "DB_HMI_Data".motorForwardOn := true;
@@ -38,7 +38,7 @@ BEGIN
 	    #state_rev := FALSE;
 	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 := false;
 	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X8 := false;
-	    "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	    "DB_MB_RTU_MasterConfig".StepRequest := "WriteMotorOnOff";
 	    #state_start := TRUE;
 	    #state_stop := true;
 	    "DB_HMI_Data".motorForwardOn := FALSE;
@@ -49,7 +49,7 @@ BEGIN
 	    #state_stop := false;
 	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 := false;
 	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X1 := false;
-	    "DB_MB_RTU_MasterConfig".StepRequest := 2;
+	    "DB_MB_RTU_MasterConfig".StepRequest := "WriteMotorOnOff";
 	    #state_start := TRUE;
 	    #state_rev := true;
 	    "DB_HMI_Data".motorForwardOn := false;
@@ -63,7 +63,7 @@ BEGIN
 	"DB_HMI_Data".frequencySetpoint := DWORD_TO_REAL(SHL(IN := WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[1]), N := 16) OR
 	                                                 WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[2]));
 	IF "DB_HMI_Data".frequencySetpoint <> #frequencySetpoint_Last THEN
-	    "DB_MB_RTU_MasterConfig".StepRequest := 3;
+	    "DB_MB_RTU_MasterConfig".StepRequest := "WriteFrequencySetpoint";
 	    #frequencySetpoint_Last := "DB_HMI_Data".frequencySetpoint;
 	END_IF;
 	
@@ -80,7 +80,7 @@ BEGIN
 	// Int ->holding-регистр [5]
 	"DB_HMI_Data".frequencySource := WORD_TO_INT("DB_MB_TCP_ServerConfig".HoldingReg[5]);
 	IF "DB_HMI_Data".frequencySource <> #frequencySource_Last THEN
-	    "DB_MB_RTU_MasterConfig".StepRequest := 4;
+	    "DB_MB_RTU_MasterConfig".StepRequest := "WriteSpeedSourceSelect";
 	    #frequencySource_Last := "DB_HMI_Data".frequencySource;
 	END_IF;
 	

@@ -1,0 +1,87 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Engineering version="V18" />
+  <SW.Blocks.InstanceDB ID="0">
+    <AttributeList>
+      <InstanceOfName>MB_MASTER</InstanceOfName>
+      <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+  <Section Name="Base">
+    <Sections Datatype="MB_BASE" Version="1.0">
+      <Section Name="Input" />
+      <Section Name="Output" />
+      <Section Name="InOut" />
+      <Section Name="Static" />
+    </Sections>
+  </Section>
+  <Section Name="Input">
+    <Member Name="REQ" Datatype="Bool" />
+    <Member Name="MB_ADDR" Datatype="UInt" />
+    <Member Name="MODE" Datatype="USInt" />
+    <Member Name="DATA_ADDR" Datatype="UDInt" />
+    <Member Name="DATA_LEN" Datatype="UInt" />
+  </Section>
+  <Section Name="Output">
+    <Member Name="DONE" Datatype="Bool" />
+    <Member Name="BUSY" Datatype="Bool" />
+    <Member Name="ERROR" Datatype="Bool" />
+    <Member Name="STATUS" Datatype="Word" />
+  </Section>
+  <Section Name="InOut">
+    <Member Name="DATA_PTR" Datatype="Variant" />
+  </Section>
+  <Section Name="Static">
+    <Member Name="SEND_PTP_SFB" Datatype="Array[0..11] of Byte" Accessibility="Private" />
+    <Member Name="RCV_PTP_SFB" Datatype="Array[0..11] of Byte" Accessibility="Private" />
+    <Member Name="RCV_RST_SFB" Datatype="Array[0..9] of Byte" Accessibility="Private" />
+    <Member Name="PF_FREQUENCY" Datatype="Real" Accessibility="Private" />
+    <Member Name="BLOCKED_PROC_TIMEOUT" Datatype="Real" />
+    <Member Name="CURRENT_TIME_VALUE" Datatype="UDInt" Accessibility="Private" />
+    <Member Name="SAVED_TIME_VALUE" Datatype="UDInt" Accessibility="Private" />
+    <Member Name="SAVED_SLAVE_ADDR" Datatype="Word" Accessibility="Private" />
+    <Member Name="SAVED_MODE" Datatype="Word" Accessibility="Private" />
+    <Member Name="SAVED_DATA_ADDR" Datatype="DWord" Accessibility="Private" />
+    <Member Name="SAVED_DATA_LEN" Datatype="UInt" Accessibility="Private" />
+    <Member Name="MB_STATE" Datatype="UInt" Accessibility="Private" />
+    <Member Name="COMM_SENT_COUNT" Datatype="UInt" Accessibility="Private" />
+    <Member Name="BYTE_COUNT" Datatype="USInt" Accessibility="Private" />
+    <Member Name="INIT_OK" Datatype="Bool" Accessibility="Private" />
+    <Member Name="ACTIVE" Datatype="Bool" Accessibility="Private" />
+    <Member Name="BROADCAST_FLAG" Datatype="Bool" Accessibility="Private" />
+    <Member Name="EXTENDED_ADDRESSING" Datatype="Bool" />
+    <Member Name="SAVED_START_ADDR" Datatype="UInt" Accessibility="Private" />
+    <Member Name="TXBuf_Function_Offset" Datatype="UDInt" Accessibility="Private" />
+    <Member Name="TXBuf_Address_Offset" Datatype="UDInt" Accessibility="Private" />
+    <Member Name="TXBuf_Quantity_Offset" Datatype="UDInt" Accessibility="Private" />
+  </Section>
+</Sections></Interface>
+      <Name>MB_MASTER_DB</Name>
+      <Namespace />
+      <Number>9</Number>
+      <OfSystemLibElement>MB_MASTER</OfSystemLibElement>
+      <OfSystemLibVersion>2.2</OfSystemLibVersion>
+      <ProgrammingLanguage>DB</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="1" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="2" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+      <MultilingualText ID="3" CompositionName="Title">
+        <ObjectList>
+          <MultilingualTextItem ID="4" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Blocks.InstanceDB>
+</Document>

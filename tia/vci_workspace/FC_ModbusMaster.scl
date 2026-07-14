@@ -15,15 +15,18 @@ BEGIN
 	    
 	    CASE "DB_MB_RTU_MasterConfig".Step OF
 	            
-	        0://чтение Регистров параметров монитора (0020h - 0029h)
+	        "readMonitorParams":
+	            //чтение Регистров параметров монитора (0020h - 0029h)
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40033;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 10;
-	        1://чтение регистров команд (регистр 0000h и 0001h) 
+	        "ReadCommandRegs":
+	            //чтение регистров команд (регистр 0000h и 0001h) 
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 2;
-	        2:// включение/выключение двигателя (запись в регистр 0000h значение 1)
+	        "WriteMotorOnOff":
+	            // запись включение/выключение двигателя (запись в регистр 0000h значение 1)
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
@@ -31,12 +34,14 @@ BEGIN
 	            
 	           // Измениеть предыдущую строку на присваивание значение из таблицы "DB_HMI_Data".MotorOn, А не из холдинг регистра
 	        
-	        3:// задание частоты (запись в регистр 0001h )
+	        "WriteFrequencySetpoint":
+	            // запись задание частоты (запись в регистр 0001h )
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40002;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
 	            "DB_VFD_Data".ReadRegs[0] := INT_TO_WORD(REAL_TO_INT(("DB_HMI_Data".frequencySetpoint)*100));
-	        4:// выбор источника задания частоты (запись в регистр 2101h)
+	        "WriteSpeedSourceSelect":
+	            // запись выбор источника задания частоты (запись в регистр 2101h)
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 48450;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
@@ -88,7 +93,7 @@ BEGIN
 	    // case 1 -> 0 -> 1 -> 0 ->...
 	    IF "DB_MB_RTU_MasterConfig".Step >= 1 THEN
 	        IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
-	            "DB_MB_RTU_MasterConfig".StepRequest := 0;
+	            "DB_MB_RTU_MasterConfig".StepRequest := "readMonitorParams";
 	        END_IF;
 	    ELSE
 	        IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
@@ -102,7 +107,7 @@ BEGIN
 	// Ошибка
 	IF "DB_MB_RTU_MasterConfig".ERROR THEN
 	    "DB_MB_RTU_MasterConfig".REQ := FALSE;
-	    "DB_MB_RTU_MasterConfig".StepRequest := 0;   // на всякий случай
+	    "DB_MB_RTU_MasterConfig".StepRequest := "readMonitorParams";   // на всякий случай
 	END_IF;
 	
 	
