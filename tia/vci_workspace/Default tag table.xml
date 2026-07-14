@@ -332,7 +332,7 @@
       <SW.Tags.PlcUserConstant ID="34" CompositionName="UserConstants">
         <AttributeList>
           <DataTypeName>Int</DataTypeName>
-          <Name>readMonitorParams</Name>
+          <Name>ReadMonitorParams</Name>
           <Value>0</Value>
         </AttributeList>
         <ObjectList>
@@ -371,7 +371,7 @@
         <AttributeList>
           <DataTypeName>Int</DataTypeName>
           <Name>WriteMotorOnOff</Name>
-          <Value>2</Value>
+          <Value>3</Value>
         </AttributeList>
         <ObjectList>
           <MultilingualText ID="3B" CompositionName="Comment">
@@ -390,7 +390,7 @@
         <AttributeList>
           <DataTypeName>Int</DataTypeName>
           <Name>WriteFrequencySetpoint</Name>
-          <Value>3</Value>
+          <Value>4</Value>
         </AttributeList>
         <ObjectList>
           <MultilingualText ID="3E" CompositionName="Comment">
@@ -409,12 +409,31 @@
         <AttributeList>
           <DataTypeName>Int</DataTypeName>
           <Name>WriteSpeedSourceSelect</Name>
-          <Value>4</Value>
+          <Value>5</Value>
         </AttributeList>
         <ObjectList>
           <MultilingualText ID="41" CompositionName="Comment">
             <ObjectList>
               <MultilingualTextItem ID="42" CompositionName="Items">
+                <AttributeList>
+                  <Culture>en-US</Culture>
+                  <Text />
+                </AttributeList>
+              </MultilingualTextItem>
+            </ObjectList>
+          </MultilingualText>
+        </ObjectList>
+      </SW.Tags.PlcUserConstant>
+      <SW.Tags.PlcUserConstant ID="43" CompositionName="UserConstants">
+        <AttributeList>
+          <DataTypeName>Int</DataTypeName>
+          <Name>ReadAlarmHistory</Name>
+          <Value>2</Value>
+        </AttributeList>
+        <ObjectList>
+          <MultilingualText ID="44" CompositionName="Comment">
+            <ObjectList>
+              <MultilingualTextItem ID="45" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
                   <Text />

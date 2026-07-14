@@ -15,7 +15,7 @@ BEGIN
 	    
 	    CASE "DB_MB_RTU_MasterConfig".Step OF
 	            
-	        "readMonitorParams":
+	        "ReadMonitorParams":
 	            //чтение Регистров параметров монитора (0020h - 0029h)
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40033;
@@ -25,6 +25,13 @@ BEGIN
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 2;
+	            // чтение регистров кода ошибок ( регистр 0090h - 0092h)       
+	        "ReadAlarmHistory":
+	            "DB_MB_RTU_MasterConfig".MODE := 0;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40145;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 3;
+	           
+	            
 	        "WriteMotorOnOff":
 	            // запись включение/выключение двигателя (запись в регистр 0000h значение 1)
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
@@ -67,7 +74,8 @@ BEGIN
 	    
 	     // Запись значений регистров парамтров мониторинга в таблицу "DB_VFD_Data"
 	    CASE "DB_MB_RTU_MasterConfig".Step OF
-	        0:  // Считываем
+	        "ReadMonitorParams":
+	            // Считываем регистры параметров монитора 
 	            "DB_VFD_Data".setFrequency := (INT_TO_REAL(WORD_TO_INT("DB_VFD_Data".ReadRegs[0]))) / 100;
 	            "DB_VFD_Data".outputFrequency := (INT_TO_REAL(WORD_TO_INT("DB_VFD_Data".ReadRegs[1]))) / 100;
 	            "DB_VFD_Data".outputCurrent := (INT_TO_REAL(WORD_TO_INT("DB_VFD_Data".ReadRegs[2]))) / 10;
@@ -76,7 +84,8 @@ BEGIN
 	            "DB_VFD_Data".statusInputTerminals := WORD_TO_INT("DB_VFD_Data".ReadRegs[9]);
 	            
 	            
-	        1:  // читали 2 регистра другого типа
+	        "ReadCommandRegs":
+	            // считали регистр команд 
 	            "DB_VFD_Data".commands := WORD_TO_INT("DB_VFD_Data".ReadRegs[0]);
 	            "DB_VFD_Data".forward := "DB_VFD_Data".ReadRegs[0].%X0;
 	            "DB_VFD_Data".revers := "DB_VFD_Data".ReadRegs[0].%X1;
@@ -87,27 +96,43 @@ BEGIN
 	            END_IF;
 	            "DB_VFD_Data".settingFrequency := WORD_TO_INT("DB_VFD_Data".ReadRegs[1]);
 	            
+	        "ReadAlarmHistory":
+	            // считали регистр кода ошибок
+	            "DB_VFD_Data".lastAlarm := "DB_VFD_Data".ReadRegs[0];
+	            "DB_VFD_Data".secondAlarm := "DB_VFD_Data".ReadRegs[1];
+	            "DB_VFD_Data".thirdMistake := "DB_VFD_Data".ReadRegs[2];
+	            
+	            
 	    END_CASE;
 	    
 	
 	    // case 1 -> 0 -> 1 -> 0 ->...
-	    IF "DB_MB_RTU_MasterConfig".Step >= 1 THEN
+	    // IF "DB_MB_RTU_MasterConfig".Step >= 1 THEN
+	    //     IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
+	    //         "DB_MB_RTU_MasterConfig".StepRequest := "ReadMonitorParams";
+	    //     END_IF;
+	    // ELSE
+	    //     IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
+	    //         "DB_MB_RTU_MasterConfig".StepRequest := "DB_MB_RTU_MasterConfig".Step + 1;
+	    //     END_IF;
+	    // END_IF;
+	    
+	    IF "DB_MB_RTU_MasterConfig".Step >= 2 THEN
 	        IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
-	            "DB_MB_RTU_MasterConfig".StepRequest := "readMonitorParams";
+	            "DB_MB_RTU_MasterConfig".StepRequest := "ReadMonitorParams";
 	        END_IF;
 	    ELSE
 	        IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
 	            "DB_MB_RTU_MasterConfig".StepRequest := "DB_MB_RTU_MasterConfig".Step + 1;
 	        END_IF;
 	    END_IF;
-	    
 	 
 	END_IF;
 	
 	// Ошибка
 	IF "DB_MB_RTU_MasterConfig".ERROR THEN
 	    "DB_MB_RTU_MasterConfig".REQ := FALSE;
-	    "DB_MB_RTU_MasterConfig".StepRequest := "readMonitorParams";   // на всякий случай
+	    "DB_MB_RTU_MasterConfig".StepRequest := "ReadMonitorParams";   // на всякий случай
 	END_IF;
 	
 	

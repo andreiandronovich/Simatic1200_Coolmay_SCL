@@ -49,6 +49,9 @@
         <MultiLanguageText Lang="en-US">0001h - 40002</MultiLanguageText>
       </Comment>
     </Member>
+    <Member Name="lastAlarm" Datatype="Word" />
+    <Member Name="secondAlarm" Datatype="Word" />
+    <Member Name="thirdMistake" Datatype="Word" />
   </Section>
 </Sections></Interface>
       <MemoryLayout>Standard</MemoryLayout>
