@@ -5,7 +5,7 @@
     <AttributeList>
       <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
   <Section Name="Static">
-    <Member Name="ReadRegs" Datatype="Array[0..15] of Word" />
+    <Member Name="ReadRegs" Datatype="Array[0..18] of Word" />
     <Member Name="forward" Datatype="Bool" />
     <Member Name="revers" Datatype="Bool" />
     <Member Name="stop" Datatype="Bool" />
@@ -52,6 +52,7 @@
     <Member Name="lastAlarm" Datatype="Word" />
     <Member Name="secondAlarm" Datatype="Word" />
     <Member Name="thirdMistake" Datatype="Word" />
+    <Member Name="alarms" Datatype="Array[0..18] of Bool" />
   </Section>
 </Sections></Interface>
       <MemoryLayout>Standard</MemoryLayout>

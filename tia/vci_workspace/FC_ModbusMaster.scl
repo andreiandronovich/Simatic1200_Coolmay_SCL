@@ -16,44 +16,54 @@ BEGIN
 	    CASE "DB_MB_RTU_MasterConfig".Step OF
 	            
 	        "ReadMonitorParams":
-	            //чтение Регистров параметров монитора (0020h - 0029h)
+	            //{0} чтение Регистров параметров монитора (0020h - 0029h)
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40033;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 10;
 	        "ReadCommandRegs":
-	            //чтение регистров команд (регистр 0000h и 0001h) 
+	            //{1} чтение регистров команд (регистр 0000h и 0001h) 
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 2;
-	            // чтение регистров кода ошибок ( регистр 0090h - 0092h)       
-	        "ReadAlarmHistory":
+	            //{2} чтение регистров кода ошибок ( регистр 0090h - 0092h)       
+	        "ReadAlarm":
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
-	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40145;
-	            "DB_MB_RTU_MasterConfig".DATA_LEN := 3;
-	           
-	            
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40021;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 12;
 	        "WriteMotorOnOff":
-	            // запись включение/выключение двигателя (запись в регистр 0000h значение 1)
+	            //{3} запись включение/выключение двигателя (запись в регистр 0000h значение 1)
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
 	            "DB_VFD_Data".ReadRegs[0] := "DB_MB_TCP_ServerConfig".HoldingReg[0]; // MotorOn_Cmd (0=Stop, <>0=Start)
 	            
-	           // Измениеть предыдущую строку на присваивание значение из таблицы "DB_HMI_Data".MotorOn, А не из холдинг регистра
-	        
+	            // Измениеть предыдущую строку на присваивание значение из таблицы "DB_HMI_Data".MotorOn, А не из холдинг регистра
+	            
 	        "WriteFrequencySetpoint":
-	            // запись задание частоты (запись в регистр 0001h )
+	            //{4} запись задание частоты (запись в регистр 0001h )
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40002;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
-	            "DB_VFD_Data".ReadRegs[0] := INT_TO_WORD(REAL_TO_INT(("DB_HMI_Data".frequencySetpoint)*100));
+	            "DB_VFD_Data".ReadRegs[0] := INT_TO_WORD(REAL_TO_INT(("DB_HMI_Data".frequencySetpoint) * 100));
 	        "WriteSpeedSourceSelect":
-	            // запись выбор источника задания частоты (запись в регистр 2101h)
+	            //{5} запись выбор источника задания частоты (запись в регистр 2101h)
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 48450;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
 	            "DB_VFD_Data".ReadRegs[0] := "DB_MB_TCP_ServerConfig".HoldingReg[5];
-	        5:// (запись в регистр )
+	            //{6} чтение регистров кода ошибок ( регистр 0090h - 0092h)       
+	        "ReadAlarmHistory":
+	            "DB_MB_RTU_MasterConfig".MODE := 0;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40145;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 3;
+	            
+	        "WriteResetAlarm":
+	            //{3} Reset alarm
+	            "DB_MB_RTU_MasterConfig".MODE := 1;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
+	            "DB_VFD_Data".ReadRegs[0] := INT_TO_WORD(768);
+	        90:// (запись в регистр )
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 48450;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
@@ -72,8 +82,9 @@ BEGIN
 	IF "DB_MB_RTU_MasterConfig".DONE THEN
 	    "DB_MB_RTU_MasterConfig".REQ := FALSE;
 	    
-	     // Запись значений регистров парамтров мониторинга в таблицу "DB_VFD_Data"
+	    // Запись значений регистров парамтров мониторинга в таблицу "DB_VFD_Data"
 	    CASE "DB_MB_RTU_MasterConfig".Step OF
+	            
 	        "ReadMonitorParams":
 	            // Считываем регистры параметров монитора 
 	            "DB_VFD_Data".setFrequency := (INT_TO_REAL(WORD_TO_INT("DB_VFD_Data".ReadRegs[0]))) / 100;
@@ -82,7 +93,6 @@ BEGIN
 	            "DB_VFD_Data".outputVoltage := (INT_TO_REAL(WORD_TO_INT("DB_VFD_Data".ReadRegs[5]))) / 10;
 	            "DB_VFD_Data".voltageZPT := WORD_TO_INT("DB_VFD_Data".ReadRegs[6]);
 	            "DB_VFD_Data".statusInputTerminals := WORD_TO_INT("DB_VFD_Data".ReadRegs[9]);
-	            
 	            
 	        "ReadCommandRegs":
 	            // считали регистр команд 
@@ -96,6 +106,27 @@ BEGIN
 	            END_IF;
 	            "DB_VFD_Data".settingFrequency := WORD_TO_INT("DB_VFD_Data".ReadRegs[1]);
 	            
+	        "ReadAlarm":
+	            "DB_VFD_Data".alarms["alarm_UV1"] := "DB_VFD_Data".ReadRegs[0].%X1;
+	            "DB_VFD_Data".alarms["alarm_UV3"] := "DB_VFD_Data".ReadRegs[0].%X3;
+	            "DB_VFD_Data".alarms["alarm_SC"] := "DB_VFD_Data".ReadRegs[0].%X4;
+	            "DB_VFD_Data".alarms["alarm_OC"] := "DB_VFD_Data".ReadRegs[0].%X6;
+	            "DB_VFD_Data".alarms["alarm_OV"] := "DB_VFD_Data".ReadRegs[0].%X7;
+	            "DB_VFD_Data".alarms["alarm_OH"] := "DB_VFD_Data".ReadRegs[0].%X8;
+	            "DB_VFD_Data".alarms["alarm_OL1"] := "DB_VFD_Data".ReadRegs[0].%X10;
+	            "DB_VFD_Data".alarms["alarm_OL2"] := "DB_VFD_Data".ReadRegs[0].%X11;
+	            "DB_VFD_Data".alarms["alarm_CPF03"] := "DB_VFD_Data".ReadRegs[3].%X3;
+	            "DB_VFD_Data".alarms["alarm_StopMod_LowZPT"] := "DB_VFD_Data".ReadRegs[5].%X0;
+	            "DB_VFD_Data".alarms["alarm_StopMod_HighZPT"] := "DB_VFD_Data".ReadRegs[5].%X1;
+	            "DB_VFD_Data".alarms["alarm_StopMod_OverheatingRadiator"] := "DB_VFD_Data".ReadRegs[5].%X2;
+	            "DB_VFD_Data".alarms["alarm_StopMod_bb"] := "DB_VFD_Data".ReadRegs[5].%X7;
+	            "DB_VFD_Data".alarms["alarm_CTER"] := "DB_VFD_Data".ReadRegs[10].%X0;
+	            "DB_VFD_Data".alarms["alarm_FBL"] := "DB_VFD_Data".ReadRegs[11].%X0;
+	            "DB_VFD_Data".alarms["alarm_ES"] := "DB_VFD_Data".ReadRegs[11].%X2;
+	            "DB_VFD_Data".alarms["alarm_STP0"] := "DB_VFD_Data".ReadRegs[11].%X3;
+	            "DB_VFD_Data".alarms["alarm_STP1"] := "DB_VFD_Data".ReadRegs[11].%X4;
+	            "DB_VFD_Data".alarms["alarm_STP2"] := "DB_VFD_Data".ReadRegs[11].%X5;
+	            
 	        "ReadAlarmHistory":
 	            // считали регистр кода ошибок
 	            "DB_VFD_Data".lastAlarm := "DB_VFD_Data".ReadRegs[0];
@@ -105,17 +136,6 @@ BEGIN
 	            
 	    END_CASE;
 	    
-	
-	    // case 1 -> 0 -> 1 -> 0 ->...
-	    // IF "DB_MB_RTU_MasterConfig".Step >= 1 THEN
-	    //     IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
-	    //         "DB_MB_RTU_MasterConfig".StepRequest := "ReadMonitorParams";
-	    //     END_IF;
-	    // ELSE
-	    //     IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
-	    //         "DB_MB_RTU_MasterConfig".StepRequest := "DB_MB_RTU_MasterConfig".Step + 1;
-	    //     END_IF;
-	    // END_IF;
 	    
 	    IF "DB_MB_RTU_MasterConfig".Step >= 2 THEN
 	        IF "DB_MB_RTU_MasterConfig".Step = "DB_MB_RTU_MasterConfig".StepRequest THEN
@@ -126,7 +146,7 @@ BEGIN
 	            "DB_MB_RTU_MasterConfig".StepRequest := "DB_MB_RTU_MasterConfig".Step + 1;
 	        END_IF;
 	    END_IF;
-	 
+	    
 	END_IF;
 	
 	// Ошибка

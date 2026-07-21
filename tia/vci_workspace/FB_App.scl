@@ -7,6 +7,8 @@ VERSION : 0.1
       state_start : Bool := true;
       state_rev : Bool := true;
       state_stop : Bool := true;
+      i : Int;
+      state_alarm : Bool;
    END_VAR
 
 
@@ -110,6 +112,79 @@ BEGIN
 	"DB_Sensors".timeDelay := "DB_HMI_Data".timerDelayMotorSensorsOn;
 	
 	
+	IF #state_alarm = FALSE AND "DB_MB_TCP_ServerConfig".HoldingReg[11] = 0 THEN
+	    FOR #i := 0 TO 18 DO
+	        IF "DB_VFD_Data".alarms[#i] = 1 THEN
+	            #state_alarm := true;
+	            CASE #i OF
+	                "alarm_UV1":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_UV1");
+	                    EXIT;
+	                "alarm_UV3":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_UV3");
+	                    EXIT;
+	                "alarm_SC":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_SC");
+	                    EXIT;
+	                "alarm_OC":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_OC");
+	                    EXIT;
+	                "alarm_OV":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_OV");
+	                    EXIT;
+	                "alarm_OH":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_OH");
+	                    EXIT;
+	                "alarm_OL1":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_OL1");
+	                    EXIT;
+	                "alarm_OL2":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_OL2");
+	                    EXIT;
+	                "alarm_CPF03":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_CPF03");
+	                    EXIT;
+	                "alarm_StopMod_LowZPT":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_StopMod_LowZPT");
+	                    EXIT;
+	                "alarm_StopMod_HighZPT":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_StopMod_HighZPT");
+	                    EXIT;
+	                "alarm_StopMod_OverheatingRadiator":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_StopMod_OverheatingRadiator");
+	                    EXIT;
+	                "alarm_StopMod_bb":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_StopMod_bb");
+	                    EXIT;
+	                "alarm_CTER":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_CTER");
+	                    EXIT;
+	                "alarm_ES":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_ES");
+	                    EXIT;
+	                "alarm_STP0":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_STP0");
+	                    EXIT;
+	                "alarm_STP1":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_STP1");
+	                    EXIT;
+	                "alarm_STP2":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_STP2");
+	                    EXIT;
+	            END_CASE;
+	        END_IF;
+	    END_FOR;
+	END_IF;
+	
+	IF "DB_MB_TCP_ServerConfig".HoldingReg[0].%X9 = 1 THEN
+	    IF #state_alarm = TRUE THEN
+	        "DB_MB_RTU_MasterConfig".StepRequest := "WriteResetAlarm";
+	        "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD(0);
+	        #state_alarm := FALSE;
+	        "DB_VFD_Data".alarms[#i] := 0;
+	    END_IF;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X9 := 0;
+	END_IF;
 	
 END_FUNCTION_BLOCK
 

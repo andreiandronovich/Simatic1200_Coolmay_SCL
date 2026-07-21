@@ -15,6 +15,8 @@
     <Member Name="state_start" Datatype="Bool" />
     <Member Name="state_rev" Datatype="Bool" />
     <Member Name="state_stop" Datatype="Bool" />
+    <Member Name="i" Datatype="Int" />
+    <Member Name="state_alarm" Datatype="Bool" />
   </Section>
 </Sections></Interface>
       <Name>DB_App</Name>
