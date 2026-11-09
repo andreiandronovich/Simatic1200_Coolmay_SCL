@@ -17,6 +17,8 @@
     <Member Name="frequencySource" Datatype="Int" />
     <Member Name="sensorOn" Datatype="Bool" />
     <Member Name="timerDelayMotorSensorsOn" Datatype="Time" />
+    <Member Name="plcOnline" Datatype="Bool" />
+    <Member Name="vfdOnline" Datatype="Bool" />
   </Section>
 </Sections></Interface>
       <MemoryLayout>Optimized</MemoryLayout>

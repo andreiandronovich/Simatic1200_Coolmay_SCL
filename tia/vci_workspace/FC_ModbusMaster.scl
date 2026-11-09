@@ -131,7 +131,7 @@ BEGIN
 	            // считали регистр кода ошибок
 	            "DB_VFD_Data".lastAlarm := "DB_VFD_Data".ReadRegs[0];
 	            "DB_VFD_Data".secondAlarm := "DB_VFD_Data".ReadRegs[1];
-	            "DB_VFD_Data".thirdMistake := "DB_VFD_Data".ReadRegs[2];
+	            "DB_VFD_Data".thirdAlarm := "DB_VFD_Data".ReadRegs[2];
 	            
 	            
 	    END_CASE;

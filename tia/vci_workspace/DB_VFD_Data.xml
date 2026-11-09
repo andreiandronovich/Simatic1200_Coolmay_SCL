@@ -51,7 +51,7 @@
     </Member>
     <Member Name="lastAlarm" Datatype="Word" />
     <Member Name="secondAlarm" Datatype="Word" />
-    <Member Name="thirdMistake" Datatype="Word" />
+    <Member Name="thirdAlarm" Datatype="Word" />
     <Member Name="alarms" Datatype="Array[0..18] of Bool" />
   </Section>
 </Sections></Interface>

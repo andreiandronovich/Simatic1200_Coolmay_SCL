@@ -102,20 +102,27 @@ BEGIN
 	DWORD_TO_WORD(REAL_TO_DWORD("DB_VFD_Data".outputVoltage) AND 16#FFFF);
 	"DB_HMI_Data".voltageOut := "DB_VFD_Data".outputVoltage;
 	
-	// ВКЛ/ВЫКЛ ДАТЧИК holding-регистра [10] использую только 0 бит. Остальные в резерве 
+	// holding-регистра [10]
+	// ВКЛ/ВЫКЛ ДАТЧИК использую только 0 бит.
+	// PLC Online 1 bit
+	// VFD Online 2 bit
 	"DB_HMI_Data".sensorOn := "DB_MB_TCP_ServerConfig".HoldingReg[10].%X0;
+	"DB_HMI_Data".plcOnline := "MB_SERVER_DB".Connected;
+	"DB_MB_TCP_ServerConfig".HoldingReg[10].%X1 := "MB_SERVER_DB".Connected;
 	
 	// ВРЕМЯ РАБОТЫ ДВИГАТЕЛЯ ПРИ СРАБАТЫВАНИИ ДАТЧИКА 
-	//  holding-регистра [11] и [12]
-	"DB_HMI_Data".timerDelayMotorSensorsOn := INT_TO_TIME(REAL_TO_INT((DWORD_TO_REAL(SHL(IN := WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[11]), N := 16) OR
-	                                                        WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[12])))*1000));
+	//  holding-регистра [12] и [13]
+	"DB_HMI_Data".timerDelayMotorSensorsOn := INT_TO_TIME(REAL_TO_INT((DWORD_TO_REAL(SHL(IN := WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[12]), N := 16) OR
+	                                                        WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[13])))*1000));
 	"DB_Sensors".timeDelay := "DB_HMI_Data".timerDelayMotorSensorsOn;
 	
-	
+	// поиск аварии и вывод на панель номера аварии
+	// holding-регистр [11]
 	IF #state_alarm = FALSE AND "DB_MB_TCP_ServerConfig".HoldingReg[11] = 0 THEN
 	    FOR #i := 0 TO 18 DO
 	        IF "DB_VFD_Data".alarms[#i] = 1 THEN
 	            #state_alarm := true;
+	            "DB_MB_RTU_MasterConfig".StepRequest := "ReadAlarmHistory";
 	            CASE #i OF
 	                "alarm_UV1":
 	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_UV1");
@@ -175,7 +182,7 @@ BEGIN
 	        END_IF;
 	    END_FOR;
 	END_IF;
-	
+	// сброс аварии 
 	IF "DB_MB_TCP_ServerConfig".HoldingReg[0].%X9 = 1 THEN
 	    IF #state_alarm = TRUE THEN
 	        "DB_MB_RTU_MasterConfig".StepRequest := "WriteResetAlarm";
@@ -185,6 +192,12 @@ BEGIN
 	    END_IF;
 	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X9 := 0;
 	END_IF;
+	
+	// ALarm history
+	"DB_MB_TCP_ServerConfig".HoldingReg[14] := "DB_VFD_Data".lastAlarm;
+	"DB_MB_TCP_ServerConfig".HoldingReg[15] := "DB_VFD_Data".secondAlarm;
+	"DB_MB_TCP_ServerConfig".HoldingReg[16] := "DB_VFD_Data".thirdAlarm;
+	
 	
 END_FUNCTION_BLOCK
 
