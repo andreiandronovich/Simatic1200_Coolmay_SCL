@@ -9,6 +9,10 @@ VERSION : 0.1
       state_stop : Bool := true;
       i : Int;
       state_alarm : Bool;
+      hbLast : Word;
+      hbArmed : Bool;
+      hbChanged : Bool;
+      hbTimer {InstructionName := 'TON_TIME'; LibVersion := '1.0'; S7_SetPoint := 'False'} : TON_TIME;
    END_VAR
 
 
@@ -17,6 +21,31 @@ BEGIN
 	"FC_ModbusSrv"();
 	"FC_ModbusMaster"();
 	"DB_Sensors"();
+	
+	// Контроль связи с ноутбуком: HoldingReg[17] = heartbeat, [18] = связь потеряна
+	#hbChanged := FALSE;
+	IF "DB_MB_TCP_ServerConfig".HoldingReg[17] = 0 THEN
+	    #hbArmed := FALSE;
+	    #hbLast := 0;
+	ELSIF "DB_MB_TCP_ServerConfig".HoldingReg[17] <> #hbLast THEN
+	    #hbLast := "DB_MB_TCP_ServerConfig".HoldingReg[17];
+	    #hbArmed := TRUE;
+	    #hbChanged := TRUE;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[18] := 0;
+	END_IF;
+	// измнение времени работы после отключения ноутбука
+	#hbTimer(IN := #hbArmed AND NOT #hbChanged,
+	         PT := T#3s);
+	
+	IF #hbTimer.Q THEN
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X0 := FALSE;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X1 := FALSE;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[0].%X8 := TRUE;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[17] := 0;
+	    "DB_MB_TCP_ServerConfig".HoldingReg[18] := 1;
+	    #hbLast := 0;
+	    #hbArmed := FALSE;
+	END_IF;
 	
 	
 	// ПУСК РЕВЕРС СТОП. Можно добавить условие, если все флаги равны false, то поставить все флаги в true. Ну или хотя бы флаг стоп

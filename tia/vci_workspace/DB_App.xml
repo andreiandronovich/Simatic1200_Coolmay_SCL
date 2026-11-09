@@ -17,6 +17,10 @@
     <Member Name="state_stop" Datatype="Bool" />
     <Member Name="i" Datatype="Int" />
     <Member Name="state_alarm" Datatype="Bool" />
+    <Member Name="hbLast" Datatype="Word" />
+    <Member Name="hbArmed" Datatype="Bool" />
+    <Member Name="hbChanged" Datatype="Bool" />
+    <Member Name="hbTimer" Datatype="TON_TIME" Version="1.0" />
   </Section>
 </Sections></Interface>
       <Name>DB_App</Name>

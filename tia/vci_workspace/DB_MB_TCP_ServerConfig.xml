@@ -57,31 +57,6 @@
           <MultiLanguageText Lang="en-US">MotorOn_Cmd (0=Stop, &lt;&gt;0=Start)</MultiLanguageText>
         </Comment>
       </Subelement>
-      <Subelement Path="1">
-        <Comment>
-          <MultiLanguageText Lang="en-US">SetFrequency_Hold</MultiLanguageText>
-        </Comment>
-      </Subelement>
-      <Subelement Path="2">
-        <Comment>
-          <MultiLanguageText Lang="en-US">FrequencyAct_Hold</MultiLanguageText>
-        </Comment>
-      </Subelement>
-      <Subelement Path="3">
-        <Comment>
-          <MultiLanguageText Lang="en-US">MinValueClamp</MultiLanguageText>
-        </Comment>
-      </Subelement>
-      <Subelement Path="4">
-        <Comment>
-          <MultiLanguageText Lang="en-US">MaxValueClamp</MultiLanguageText>
-        </Comment>
-      </Subelement>
-      <Subelement Path="5">
-        <Comment>
-          <MultiLanguageText Lang="en-US">frequencySource (Выбор источника задания частоты)</MultiLanguageText>
-        </Comment>
-      </Subelement>
     </Member>
   </Section>
 </Sections></Interface>
