@@ -1,11 +1,12 @@
-"""panel.py - панель привода: OPC UA (S7-1200), главный экран + страница параметров (разгон/торможение).
+"""panel.py - панель привода: OPC UA (S7-1200), главный экран + страница параметров + история в CSV.
 Запуск: start_panel.bat или python panel.py  ->  http://127.0.0.1:8080  (параметры: /settings)
 Не запускай одновременно с control.py (оба пишут heartbeat в регистр [17]).
-DEMO = True - режим без ПЛК.
+DEMO = True - режим без ПЛК (история в этом режиме не пишется).
 """
-import asyncio, math, struct, time, traceback
+import asyncio, csv, math, struct, time, traceback
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 from nicegui import app, ui
 from asyncua import Client, ua
 
@@ -18,6 +19,11 @@ CMD_FWD, CMD_REV, CMD_STOP, CMD_RESET = 1, 2, 256, 512
 HB_REG = 17
 ACC_REG, DEC_REG = 19, 21     # float32 в двух регистрах: [19,20] разгон, [21,22] торможение
 T_MIN, T_MAX = 0.1, 600.0     # допустимое время, с (уточни по руководству частотника)
+
+HISTORY_DIR = Path(__file__).resolve().parent / "history"
+IDLE_PERIOD = 10              # в простое пишем строку раз в N секунд, при работе - каждую секунду
+DECIMAL_COMMA = True          # True: десятичная запятая (русский Excel), False: точка
+HB_OK_SEC = 3.0               # heartbeat считается живым, если запись проходила не позже N секунд назад
 
 BG, CARD, BORDER = "#0f1420", "#1a2133", "#2a3350"
 TXT, DIM = "#e8ecf5", "#7b869e"
@@ -44,14 +50,62 @@ body {{ background:{BG}; color:{TXT}; font-family:'Segoe UI',Arial,sans-serif; }
 
 # ---------- общее состояние ----------
 state = {"freq": 0.0, "setpoint": 0.0, "current": 0.0, "voltage": 0.0,
-         "mode": "?", "alarm": 0, "link": False, "acc": None, "dec": None}
+         "mode": "?", "alarm": 0, "link": False, "acc": None, "dec": None,
+         "hb": 0, "hb_t": 0.0}
 trend_f, trend_i = deque(maxlen=TREND_SEC), deque(maxlen=TREND_SEC)
 events = deque(maxlen=5)
 pending_cmds = deque()        # ("start",), ("stop",), ("reverse",), ("reset",), ("freq", hz), ("acc", s), ("dec", s)
 slider_edit = {"value": None, "t": 0.0}
+_warned = {"history": False}
+
+# ---------- история в CSV ----------
+def _num(x, nd=2):
+    if x is None:
+        return ""
+    s = f"{x:.{nd}f}"
+    return s.replace(".", ",") if DECIMAL_COMMA else s
+
+def _append_csv(path, header, row):
+    HISTORY_DIR.mkdir(exist_ok=True)
+    new = not path.exists()
+    with open(path, "a", newline="", encoding="utf-8-sig" if new else "utf-8") as f:
+        w = csv.writer(f, delimiter=";")
+        if new:
+            w.writerow(header)
+        w.writerow(row)
+
+def write_history():
+    if DEMO:
+        return
+    now = datetime.now()
+    s = state
+    path = HISTORY_DIR / f"drive_{now:%Y-%m-%d}.csv"
+    header = ["время", "режим", "уставка_Гц", "частота_Гц", "ток_А", "напряжение_В",
+              "авария", "разгон_с", "торможение_с"]
+    row = [now.strftime("%Y-%m-%d %H:%M:%S"), s["mode"], _num(s["setpoint"], 1), _num(s["freq"], 2),
+           _num(s["current"], 2), _num(s["voltage"], 1), s["alarm"], _num(s["acc"], 1), _num(s["dec"], 1)]
+    try:
+        _append_csv(path, header, row)
+        _warned["history"] = False
+    except Exception as e:
+        if not _warned["history"]:
+            _warned["history"] = True
+            log("История: файл занят (закрой Excel)", RED)
+            print("history error:", repr(e))
+
+def write_event(msg):
+    if DEMO:
+        return
+    now = datetime.now()
+    try:
+        _append_csv(HISTORY_DIR / f"events_{now:%Y-%m-%d}.csv", ["время", "событие"],
+                    [now.strftime("%Y-%m-%d %H:%M:%S"), msg])
+    except Exception as e:
+        print("event log error:", repr(e))
 
 def log(msg, color):
     events.appendleft((datetime.now().strftime("%H:%M:%S"), msg, color))
+    write_event(msg)
 
 def to_float(hi, lo):
     return struct.unpack(">f", struct.pack(">HH", hi, lo))[0]
@@ -150,6 +204,7 @@ async def plc_loop():
                 while True:
                     n = n % 65535 + 1
                     await asyncio.wait_for(d.write_reg(HB_REG, n), 5)
+                    state["hb"], state["hb_t"] = n, time.time()
                     await asyncio.wait_for(handle_cmds(d), 5)
                     apply_regs(await asyncio.wait_for(d.regs(), 5))
                     await asyncio.sleep(1)
@@ -166,6 +221,7 @@ async def demo_loop():
     run = False
     state.update(link=True, setpoint=12.0, mode="СТОП", acc=5.0, dec=5.0)
     while True:
+        state["hb"] += 1; state["hb_t"] = time.time()
         if slider_edit["value"] is not None and time.time() - slider_edit["t"] > 0.4:
             pending_cmds.append(("freq", slider_edit["value"])); slider_edit["value"] = None
         while pending_cmds:
@@ -182,13 +238,18 @@ async def demo_loop():
         await asyncio.sleep(1)
 
 async def ticker():
-    last_alarm = 0
+    """Раз в секунду: тренд, события аварий и запись истории (один раз, независимо от числа вкладок)."""
+    last_alarm, last_write = 0, 0.0
     while True:
-        trend_f.append(round(state["freq"], 2)); trend_i.append(round(state["current"], 2))
-        if state["alarm"] != last_alarm:
-            log(f"Авария {state['alarm']}" if state["alarm"] else "Авария снята",
-                RED if state["alarm"] else GREEN)
-            last_alarm = state["alarm"]
+        s = state
+        trend_f.append(round(s["freq"], 2)); trend_i.append(round(s["current"], 2))
+        if s["alarm"] != last_alarm:
+            log(f"Авария {s['alarm']}" if s["alarm"] else "Авария снята", RED if s["alarm"] else GREEN)
+            last_alarm = s["alarm"]
+        if s["link"]:
+            active = s["freq"] > 0.05 or s["mode"] in ("ВПЕРЁД", "РЕВЕРС")
+            if active or time.time() - last_write >= IDLE_PERIOD:
+                write_history(); last_write = time.time()
         await asyncio.sleep(1)
 
 _tasks = set()
@@ -218,6 +279,15 @@ def link_html():
     c = GREEN if state["link"] else RED
     return (f'<span class="dot" style="background:{c}"></span><span style="color:{c}">'
             f'OPC UA: {"подключено" if state["link"] else "нет связи"}</span>')
+
+def hb_html():
+    age = time.time() - state["hb_t"] if state["hb_t"] else None
+    if not state["link"] or age is None:
+        return f'<span class="dot" style="background:{RED}"></span><span style="color:{RED}">Heartbeat: нет</span>'
+    ok = age <= HB_OK_SEC
+    c = GREEN if ok else RED
+    return (f'<span class="dot" style="background:{c}"></span><span style="color:{c}">'
+            f'Heartbeat: {state["hb"]}</span>')
 
 def fmt_t(x):
     return "—" if x is None else f"{x:.1f}"
@@ -312,9 +382,8 @@ def index():
         gauge.options["series"][0]["data"][0]["value"] = round(s["freq"], 1)
         gauge.update()
         sp_lbl.set_text(f"{s['setpoint']:.1f} Гц")
-        c = GREEN if s["link"] else RED
         opc_lbl.set_content(link_html())
-        hb_lbl.set_content(f'<span class="dot" style="background:{c}"></span><span style="color:{c}">Heartbeat: 1 с</span>')
+        hb_lbl.set_content(hb_html())
         if not s["link"]:
             mode_lbl.set_text("НЕТ СВЯЗИ"); mode_lbl.style(f"background:#2a1519;color:{RED};border:1px solid {RED}")
         elif s["mode"] == "ВПЕРЁД":
@@ -387,6 +456,12 @@ def settings():
     with ui.element("div").classes("grid2e"):
         block("acc", "ВРЕМЯ РАЗГОНА", f"Запись в HoldingReg[{ACC_REG}–{ACC_REG + 1}]")
         block("dec", "ВРЕМЯ ТОРМОЖЕНИЯ", f"Запись в HoldingReg[{DEC_REG}–{DEC_REG + 1}]")
+
+    with ui.element("div").classes("card").style("width:100%"):
+        ui.label("ИСТОРИЯ").classes("cap")
+        ui.label(f"Данные пишутся в папку: {HISTORY_DIR}").style("margin-top:6px;font-size:14px")
+        ui.label("drive_ГГГГ-ММ-ДД.csv — частота, ток, напряжение, авария; events_ГГГГ-ММ-ДД.csv — команды и события.") \
+            .classes("cap").style("margin-top:4px")
 
     def refresh():
         opc_lbl.set_content(link_html())
