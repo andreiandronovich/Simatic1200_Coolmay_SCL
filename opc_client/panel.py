@@ -1,7 +1,7 @@
-"""panel.py - этап 2: панель подключена к ПЛК по OPC UA (логика из monitor.py и control.py).
-Запуск:  python panel.py   ->   http://127.0.0.1:8080
-ВАЖНО: не запускай одновременно с control.py - у обоих свой heartbeat в регистр [17].
-DEMO = True включает режим без ПЛК (для проверки внешнего вида).
+"""panel.py - панель привода: OPC UA (S7-1200), главный экран + страница параметров (разгон/торможение).
+Запуск: start_panel.bat или python panel.py  ->  http://127.0.0.1:8080  (параметры: /settings)
+Не запускай одновременно с control.py (оба пишут heartbeat в регистр [17]).
+DEMO = True - режим без ПЛК.
 """
 import asyncio, math, struct, time, traceback
 from collections import deque
@@ -16,6 +16,8 @@ ARRAY_NODE = "ns=4;i=2"
 MAX_HZ = 50.0
 CMD_FWD, CMD_REV, CMD_STOP, CMD_RESET = 1, 2, 256, 512
 HB_REG = 17
+ACC_REG, DEC_REG = 19, 21     # float32 в двух регистрах: [19,20] разгон, [21,22] торможение
+T_MIN, T_MAX = 0.1, 600.0     # допустимое время, с (уточни по руководству частотника)
 
 BG, CARD, BORDER = "#0f1420", "#1a2133", "#2a3350"
 TXT, DIM = "#e8ecf5", "#7b869e"
@@ -28,21 +30,24 @@ body {{ background:{BG}; color:{TXT}; font-family:'Segoe UI',Arial,sans-serif; }
 .card {{ background:{CARD}; border:1px solid {BORDER}; border-radius:14px; padding:16px 18px; }}
 .cap {{ color:{DIM}; font-size:13px; letter-spacing:.5px; }}
 .row-val {{ display:flex; justify-content:space-between; align-items:baseline;
-           border-bottom:1px solid {BORDER}; padding:12px 0; }}
+           border-bottom:1px solid {BORDER}; padding:10px 0; }}
 .big {{ font-size:30px; font-weight:700; }}
+.mid {{ font-size:24px; font-weight:700; }}
 .unit {{ color:{DIM}; font-size:13px; margin-left:6px; }}
 .dot {{ width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:8px; }}
 .grid3 {{ display:grid; grid-template-columns:1.25fr 1fr 1.05fr; gap:14px; width:100%; }}
 .grid2 {{ display:grid; grid-template-columns:1.8fr 1fr; gap:14px; width:100%; }}
+.grid2e {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; width:100%; }}
 .btn {{ font-weight:700; font-size:16px; border-radius:10px; height:48px; }}
+.chip {{ border-radius:8px; font-weight:600; }}
 """
 
-# ---------- общее состояние (создаётся один раз, общее для всех вкладок) ----------
+# ---------- общее состояние ----------
 state = {"freq": 0.0, "setpoint": 0.0, "current": 0.0, "voltage": 0.0,
-         "mode": "?", "alarm": 0, "link": False}
+         "mode": "?", "alarm": 0, "link": False, "acc": None, "dec": None}
 trend_f, trend_i = deque(maxlen=TREND_SEC), deque(maxlen=TREND_SEC)
 events = deque(maxlen=5)
-pending_cmds = deque()        # ("start",), ("stop",), ("reset",), ("freq", hz)
+pending_cmds = deque()        # ("start",), ("stop",), ("reverse",), ("reset",), ("freq", hz), ("acc", s), ("dec", s)
 slider_edit = {"value": None, "t": 0.0}
 
 def log(msg, color):
@@ -73,12 +78,22 @@ class Drive:
     async def regs(self):
         return await self.arr.read_value()
 
+    async def write_float(self, idx, x):
+        hi, lo = from_float(x)
+        await self.write_reg(idx, hi); await self.write_reg(idx + 1, lo)
+
     async def set_freq(self, hz):
         if not 0.0 <= hz <= MAX_HZ:
-            log(f"Отказ: уставка 0..{MAX_HZ} Гц", RED); return
-        hi, lo = from_float(hz)
-        await self.write_reg(1, hi); await self.write_reg(2, lo)
+            log(f"Отказ: уставка 0..{MAX_HZ:g} Гц", RED); return
+        await self.write_float(1, hz)
         log(f"Уставка {hz:.1f} Гц", AMBER)
+
+    async def set_time(self, kind, sec):
+        name, reg = ("Разгон", ACC_REG) if kind == "acc" else ("Торможение", DEC_REG)
+        if not T_MIN <= sec <= T_MAX:
+            log(f"Отказ: {name.lower()} {T_MIN:g}..{T_MAX:g} с", RED); return
+        await self.write_float(reg, sec)
+        log(f"{name} {sec:.1f} с", AMBER)
 
     async def start(self):
         r = await self.regs()
@@ -107,6 +122,9 @@ class Drive:
 def apply_regs(r):
     state.update(mode=mode_of(r[0]), setpoint=to_float(r[1], r[2]), freq=to_float(r[3], r[4]),
                  current=to_float(r[6], r[7]), voltage=to_float(r[8], r[9]), alarm=int(r[11]))
+    if len(r) > DEC_REG + 1:
+        state["acc"] = to_float(r[ACC_REG], r[ACC_REG + 1])
+        state["dec"] = to_float(r[DEC_REG], r[DEC_REG + 1])
 
 async def handle_cmds(d):
     if slider_edit["value"] is not None and time.time() - slider_edit["t"] > 0.4:
@@ -116,9 +134,10 @@ async def handle_cmds(d):
         name, *arg = pending_cmds.popleft()
         if name == "start": await d.start()
         elif name == "stop": await d.stop()
-        elif name == "reset": await d.reset()
         elif name == "reverse": await d.reverse()
+        elif name == "reset": await d.reset()
         elif name == "freq": await d.set_freq(arg[0])
+        elif name in ("acc", "dec"): await d.set_time(name, arg[0])
 
 async def plc_loop():
     n = 0
@@ -145,7 +164,7 @@ async def plc_loop():
 
 async def demo_loop():
     run = False
-    state.update(link=True, setpoint=12.0, mode="СТОП")
+    state.update(link=True, setpoint=12.0, mode="СТОП", acc=5.0, dec=5.0)
     while True:
         if slider_edit["value"] is not None and time.time() - slider_edit["t"] > 0.4:
             pending_cmds.append(("freq", slider_edit["value"])); slider_edit["value"] = None
@@ -154,6 +173,8 @@ async def demo_loop():
             if name == "start": run = True; state["mode"] = "ВПЕРЁД"; log("Пуск вперёд", GREEN)
             elif name == "stop": run = False; state["mode"] = "СТОП"; log("Стоп (панель)", RED)
             elif name == "freq": state["setpoint"] = arg[0]; log(f"Уставка {arg[0]:.1f} Гц", AMBER)
+            elif name in ("acc", "dec"):
+                state[name] = arg[0]; log(f"{'Разгон' if name == 'acc' else 'Торможение'} {arg[0]:.1f} с", AMBER)
         state["freq"] += ((state["setpoint"] if run else 0) - state["freq"]) * 0.15
         f = state["freq"]
         state["current"] = 0.0 if f < 0.1 else 5.5 + 0.3 * math.sin(time.time() / 3)
@@ -161,7 +182,6 @@ async def demo_loop():
         await asyncio.sleep(1)
 
 async def ticker():
-    """Раз в секунду: тренд и события аварий (один раз, независимо от числа открытых вкладок)."""
     last_alarm = 0
     while True:
         trend_f.append(round(state["freq"], 2)); trend_i.append(round(state["current"], 2))
@@ -188,20 +208,31 @@ async def on_shutdown():
 app.on_startup(on_startup)
 app.on_shutdown(on_shutdown)
 
-def row(label, value, color, unit=""):
+# ---------- общие элементы интерфейса ----------
+def row(label, value, color, unit="", cls="big"):
     u = f'<span class="unit">{unit}</span>' if unit else ""
     return (f'<div class="row-val"><span class="cap" style="font-size:15px">{label}</span>'
-            f'<span><span class="big" style="color:{color}">{value}</span>{u}</span></div>')
+            f'<span><span class="{cls}" style="color:{color}">{value}</span>{u}</span></div>')
 
-# ---------- интерфейс (строится заново для каждой открытой страницы) ----------
+def link_html():
+    c = GREEN if state["link"] else RED
+    return (f'<span class="dot" style="background:{c}"></span><span style="color:{c}">'
+            f'OPC UA: {"подключено" if state["link"] else "нет связи"}</span>')
+
+def fmt_t(x):
+    return "—" if x is None else f"{x:.1f}"
+
+# ---------- главная страница ----------
 @ui.page("/")
 def index():
     ui.add_css(CSS)
     with ui.element("div").classes("card").style("width:100%;display:flex;justify-content:space-between;align-items:center"):
         ui.label("ПРИВОД  |  Simatic S7-1200 + Coolmay VFD").style("font-size:20px;font-weight:700")
-        with ui.row().style("gap:28px"):
+        with ui.row().style("gap:28px;align-items:center"):
             opc_lbl = ui.html("").style("font-size:14px")
             hb_lbl = ui.html("").style("font-size:14px")
+            ui.button("⚙  ПАРАМЕТРЫ", on_click=lambda: ui.navigate.to("/settings")) \
+                .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:10px")
 
     with ui.element("div").classes("grid3"):
         with ui.element("div").classes("card"):
@@ -235,7 +266,7 @@ def index():
                     .classes("btn").style(f"background:{BORDER}!important;color:{TXT}")
                 ui.button("СБРОС", on_click=lambda: pending_cmds.append(("reset",))) \
                     .classes("btn").style(f"background:{BORDER}!important;color:{TXT}")
-            ui.label("Уставка, Гц (0–50)").classes("cap").style("margin-top:18px")
+            ui.label(f"Уставка, Гц (0–{MAX_HZ:g})").classes("cap").style("margin-top:18px")
 
             def on_slider(e):
                 if abs(e.value - state["setpoint"]) < 0.05:
@@ -250,6 +281,8 @@ def index():
             cur_lbl = ui.html("").style("width:100%")
             vol_lbl = ui.html("").style("width:100%")
             alm_lbl = ui.html("").style("width:100%")
+            acc_lbl = ui.html("").style("width:100%")
+            dec_lbl = ui.html("").style("width:100%")
 
     with ui.element("div").classes("grid2"):
         with ui.element("div").classes("card"):
@@ -280,8 +313,7 @@ def index():
         gauge.update()
         sp_lbl.set_text(f"{s['setpoint']:.1f} Гц")
         c = GREEN if s["link"] else RED
-        opc_lbl.set_content(f'<span class="dot" style="background:{c}"></span><span style="color:{c}">'
-                            f'OPC UA: {"подключено" if s["link"] else "нет связи"}</span>')
+        opc_lbl.set_content(link_html())
         hb_lbl.set_content(f'<span class="dot" style="background:{c}"></span><span style="color:{c}">Heartbeat: 1 с</span>')
         if not s["link"]:
             mode_lbl.set_text("НЕТ СВЯЗИ"); mode_lbl.style(f"background:#2a1519;color:{RED};border:1px solid {RED}")
@@ -295,6 +327,8 @@ def index():
         vol_lbl.set_content(row("Напряжение", f"{s['voltage']:.1f}", BLUE, "В"))
         alm_lbl.set_content(row("Авария", "нет" if s["alarm"] == 0 else f"код {s['alarm']}",
                                 GREEN if s["alarm"] == 0 else RED))
+        acc_lbl.set_content(row("Разгон", fmt_t(s["acc"]), AMBER, "с", "mid"))
+        dec_lbl.set_content(row("Торможение", fmt_t(s["dec"]), AMBER, "с", "mid"))
         trend.options["xAxis"]["data"] = list(range(-len(trend_f) + 1, 1))
         trend.options["series"][0]["data"] = list(trend_f)
         trend.options["series"][1]["data"] = list(trend_i)
@@ -303,6 +337,62 @@ def index():
             f'<div style="padding:7px 0;font-size:14px"><span class="cap" style="margin-right:10px">{t}</span>'
             f'<span class="dot" style="background:{col}"></span>{m}</div>' for t, m, col in events))
 
+    refresh()
+    ui.timer(1.0, refresh)
+
+# ---------- страница параметров ----------
+@ui.page("/settings")
+def settings():
+    ui.add_css(CSS)
+    with ui.element("div").classes("card").style("width:100%;display:flex;justify-content:space-between;align-items:center"):
+        with ui.row().style("gap:18px;align-items:center"):
+            ui.button("←  НАЗАД", on_click=lambda: ui.navigate.to("/")) \
+                .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:10px")
+            ui.label("ПАРАМЕТРЫ ПРИВОДА").style("font-size:20px;font-weight:700")
+        opc_lbl = ui.html("").style("font-size:14px")
+
+    live = {}
+
+    def block(kind, title, reg_text):
+        with ui.element("div").classes("card"):
+            ui.label(title).classes("cap")
+            with ui.row().style("justify-content:space-between;align-items:baseline;width:100%;margin:6px 0 14px"):
+                ui.label("Сейчас в ПЛК").classes("cap")
+                live[kind] = ui.html("").style("width:auto")
+            with ui.row().style("gap:8px;align-items:center;width:100%;flex-wrap:nowrap"):
+                num = ui.number(value=state[kind] if state[kind] else 5.0, min=T_MIN, max=T_MAX, step=0.5,
+                                format="%.1f").props("outlined dark dense suffix=с input-class=text-h5") \
+                    .style("flex:1")
+                for step in (-1.0, +1.0):
+                    ui.button(f"{step:+g}", on_click=lambda n=num, st=step: n.set_value(
+                        round(min(T_MAX, max(T_MIN, (n.value or 0) + st)), 1))) \
+                        .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:8px")
+            ui.label("Быстрый выбор, с").classes("cap").style("margin-top:16px")
+            with ui.row().style("gap:8px;margin-top:6px"):
+                for v in (1, 3, 5, 10, 20, 30):
+                    ui.button(f"{v}", on_click=lambda n=num, x=v: n.set_value(float(x))).classes("chip") \
+                        .props("flat dense").style(f"background:{BORDER}!important;color:{TXT};min-width:44px")
+
+            def apply(n=num, k=kind):
+                if n.value is None or not T_MIN <= n.value <= T_MAX:
+                    ui.notify(f"Допустимо {T_MIN:g}…{T_MAX:g} с", type="negative"); return
+                if not state["link"]:
+                    ui.notify("Нет связи с ПЛК", type="negative"); return
+                pending_cmds.append((k, round(float(n.value), 1)))
+                ui.notify("Отправлено в ПЛК", type="positive")
+            ui.button("ПРИМЕНИТЬ", on_click=apply).classes("btn") \
+                .style(f"background:{GREEN}!important;color:#0b0f19;width:100%;margin-top:22px")
+            ui.label(reg_text).classes("cap").style("margin-top:12px")
+
+    with ui.element("div").classes("grid2e"):
+        block("acc", "ВРЕМЯ РАЗГОНА", f"Запись в HoldingReg[{ACC_REG}–{ACC_REG + 1}]")
+        block("dec", "ВРЕМЯ ТОРМОЖЕНИЯ", f"Запись в HoldingReg[{DEC_REG}–{DEC_REG + 1}]")
+
+    def refresh():
+        opc_lbl.set_content(link_html())
+        for k in ("acc", "dec"):
+            live[k].set_content(f'<span class="big" style="color:{AMBER}">{fmt_t(state[k])}</span>'
+                                f'<span class="unit">с</span>')
     refresh()
     ui.timer(1.0, refresh)
 
