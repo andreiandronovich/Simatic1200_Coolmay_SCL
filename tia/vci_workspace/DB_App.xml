@@ -21,6 +21,12 @@
     <Member Name="hbArmed" Datatype="Bool" />
     <Member Name="hbChanged" Datatype="Bool" />
     <Member Name="hbTimer" Datatype="TON_TIME" Version="1.0" />
+    <Member Name="AccelerationTime_last" Datatype="Real">
+      <AttributeList>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+    </Member>
+    <Member Name="BrakingTime_last" Datatype="Real" />
   </Section>
 </Sections></Interface>
       <Name>DB_App</Name>

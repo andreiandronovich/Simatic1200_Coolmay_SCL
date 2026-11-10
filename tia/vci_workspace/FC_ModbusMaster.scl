@@ -56,13 +56,22 @@ BEGIN
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40145;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 3;
-	            
 	        "WriteResetAlarm":
 	            //{3} Reset alarm
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
 	            "DB_VFD_Data".ReadRegs[0] := INT_TO_WORD(768);
+	        "WriteTimeAcceleration":
+	            "DB_MB_RTU_MasterConfig".MODE := 1;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 412546;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
+	            "DB_VFD_Data".ReadRegs[0] := INT_TO_WORD(REAL_TO_INT(("DB_HMI_Data".timeAcceleration)*10));
+	        "WriteTimeBraking":
+	            "DB_MB_RTU_MasterConfig".MODE := 1;
+	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 412547;
+	            "DB_MB_RTU_MasterConfig".DATA_LEN := 1;
+	            "DB_VFD_Data".ReadRegs[0] := INT_TO_WORD(REAL_TO_INT(("DB_HMI_Data".timeBraking) * 10));
 	        90:// (запись в регистр )
 	            "DB_MB_RTU_MasterConfig".MODE := 1;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 48450;
@@ -132,6 +141,9 @@ BEGIN
 	            "DB_VFD_Data".lastAlarm := "DB_VFD_Data".ReadRegs[0];
 	            "DB_VFD_Data".secondAlarm := "DB_VFD_Data".ReadRegs[1];
 	            "DB_VFD_Data".thirdAlarm := "DB_VFD_Data".ReadRegs[2];
+	
+	            
+	            
 	            
 	            
 	    END_CASE;
@@ -152,7 +164,9 @@ BEGIN
 	// Ошибка
 	IF "DB_MB_RTU_MasterConfig".ERROR THEN
 	    "DB_MB_RTU_MasterConfig".REQ := FALSE;
-	    "DB_MB_RTU_MasterConfig".StepRequest := "ReadMonitorParams";   // на всякий случай
+	    "DB_MB_RTU_MasterConfig".StepRequest := "ReadMonitorParams";
+	  
+	    // на всякий случай
 	END_IF;
 	
 	

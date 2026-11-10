@@ -13,6 +13,8 @@ VERSION : 0.1
       hbArmed : Bool;
       hbChanged : Bool;
       hbTimer {InstructionName := 'TON_TIME'; LibVersion := '1.0'; S7_SetPoint := 'False'} : TON_TIME;
+      AccelerationTime_last { S7_SetPoint := 'True'} : Real;
+      BrakingTime_last : Real;
    END_VAR
 
 
@@ -228,5 +230,22 @@ BEGIN
 	"DB_MB_TCP_ServerConfig".HoldingReg[16] := "DB_VFD_Data".thirdAlarm;
 	
 	
+	
+	
+	
+	"DB_HMI_Data".timeAcceleration := DWORD_TO_REAL(SHL(IN := WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[19]), N := 16) OR
+	                                                WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[20]));
+	IF "DB_HMI_Data".timeAcceleration <> #AccelerationTime_last THEN
+	    "DB_MB_RTU_MasterConfig".StepRequest := "WriteTimeAcceleration";
+	    #AccelerationTime_last:= "DB_HMI_Data".timeAcceleration;
+	END_IF;
+	
+	
+	"DB_HMI_Data".timeBraking := DWORD_TO_REAL(SHL(IN := WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[21]), N := 16) OR
+	                                           WORD_TO_DWORD("DB_MB_TCP_ServerConfig".HoldingReg[22]));
+	IF "DB_HMI_Data".timeBraking <> #BrakingTime_last THEN
+	    "DB_MB_RTU_MasterConfig".StepRequest := "WriteTimeBraking";
+	    #BrakingTime_last:= "DB_HMI_Data".timeBraking;
+	END_IF;
 END_FUNCTION_BLOCK
 

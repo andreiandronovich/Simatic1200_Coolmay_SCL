@@ -19,6 +19,8 @@
     <Member Name="timerDelayMotorSensorsOn" Datatype="Time" />
     <Member Name="plcOnline" Datatype="Bool" />
     <Member Name="vfdOnline" Datatype="Bool" />
+    <Member Name="timeAcceleration" Datatype="Real" />
+    <Member Name="timeBraking" Datatype="Real" />
   </Section>
 </Sections></Interface>
       <MemoryLayout>Optimized</MemoryLayout>

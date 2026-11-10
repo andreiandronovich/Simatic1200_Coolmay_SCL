@@ -48,7 +48,7 @@
     <Member Name="MB_DR" Datatype="Bool" Remanence="Retain" />
     <Member Name="MB_Error" Datatype="Bool" Remanence="Retain" />
     <Member Name="MB_Status" Datatype="Word" Remanence="Retain" />
-    <Member Name="HoldingReg" Datatype="Array[0..20] of Word" Remanence="Retain">
+    <Member Name="HoldingReg" Datatype="Array[0..40] of Word" Remanence="Retain">
       <AttributeList>
         <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
       </AttributeList>

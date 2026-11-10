@@ -53,6 +53,8 @@
     <Member Name="secondAlarm" Datatype="Word" />
     <Member Name="thirdAlarm" Datatype="Word" />
     <Member Name="alarms" Datatype="Array[0..18] of Bool" />
+    <Member Name="timeAccelerator" Datatype="Word" />
+    <Member Name="timeBraking" Datatype="Word" />
   </Section>
 </Sections></Interface>
       <MemoryLayout>Standard</MemoryLayout>
