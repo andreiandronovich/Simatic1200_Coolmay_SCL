@@ -13,8 +13,8 @@ DEMO = False
 URL = "opc.tcp://192.168.1.2:4840"
 BASE = 3                      # HoldingReg[n] = ns=4;i=3+n
 ARRAY_NODE = "ns=4;i=2"
-MAX_HZ = 20.0
-CMD_FWD, CMD_STOP, CMD_RESET = 1, 256, 512
+MAX_HZ = 50.0
+CMD_FWD, CMD_REV, CMD_STOP, CMD_RESET = 1, 2, 256, 512
 HB_REG = 17
 
 BG, CARD, BORDER = "#0f1420", "#1a2133", "#2a3350"
@@ -84,9 +84,19 @@ class Drive:
         r = await self.regs()
         if r[11] != 0:
             log(f"Отказ: авария {r[11]}, сначала сброс", RED); return
+        if r[0] & 2 and to_float(r[3], r[4]) > 0.5:
+            log("Пуск: сначала СТОП и дождитесь остановки", RED); return
         if to_float(r[1], r[2]) > MAX_HZ:
             log("Отказ: уставка выше лимита", RED); return
         await self.write_reg(0, CMD_FWD); log("Пуск вперёд", GREEN)
+
+    async def reverse(self):
+        r = await self.regs()
+        if r[11] != 0:
+            log(f"Отказ: авария {r[11]}, сначала сброс", RED); return
+        if r[0] & 1 or to_float(r[3], r[4]) > 0.5:
+            log("Реверс: сначала СТОП и дождитесь остановки", RED); return
+        await self.write_reg(0, CMD_REV); log("Пуск назад", AMBER)
 
     async def stop(self):
         await self.write_reg(0, CMD_STOP); log("Стоп (панель)", RED)
@@ -107,6 +117,7 @@ async def handle_cmds(d):
         if name == "start": await d.start()
         elif name == "stop": await d.stop()
         elif name == "reset": await d.reset()
+        elif name == "reverse": await d.reverse()
         elif name == "freq": await d.set_freq(arg[0])
 
 async def plc_loop():
@@ -220,11 +231,11 @@ def index():
                     .classes("btn").style(f"background:{GREEN}!important;color:#0b0f19")
                 ui.button("СТОП", on_click=lambda: pending_cmds.append(("stop",))) \
                     .classes("btn").style(f"background:{RED}!important;color:#fff")
-                ui.button("РЕВЕРС", on_click=lambda: ui.notify("Реверс пока не реализован в ПЛК", type="warning")) \
+                ui.button("РЕВЕРС", on_click=lambda: pending_cmds.append(("reverse",))) \
                     .classes("btn").style(f"background:{BORDER}!important;color:{TXT}")
                 ui.button("СБРОС", on_click=lambda: pending_cmds.append(("reset",))) \
                     .classes("btn").style(f"background:{BORDER}!important;color:{TXT}")
-            ui.label("Уставка, Гц (0–20)").classes("cap").style("margin-top:18px")
+            ui.label("Уставка, Гц (0–50)").classes("cap").style("margin-top:18px")
 
             def on_slider(e):
                 if abs(e.value - state["setpoint"]) < 0.05:
@@ -247,7 +258,7 @@ def index():
                 "animation": False, "legend": {"textStyle": {"color": TXT}, "left": 0, "top": 0},
                 "grid": {"left": 40, "right": 16, "top": 36, "bottom": 24},
                 "xAxis": {"type": "category", "data": [], "axisLabel": {"color": DIM}},
-                "yAxis": {"type": "value", "min": 0, "max": 20, "interval": 5, "axisLabel": {"color": DIM},
+                "yAxis": {"type": "value", "min": 0, "max": 50, "interval": 10, "axisLabel": {"color": DIM},
                           "splitLine": {"lineStyle": {"color": BORDER}}},
                 "series": [
                     {"name": "Частота, Гц", "type": "line", "showSymbol": False, "data": [],
