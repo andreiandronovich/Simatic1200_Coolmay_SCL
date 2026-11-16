@@ -1,13 +1,18 @@
-"""history_page.py - страница /history: просмотр CSV-истории (график, итоги, события, направление вращения)."""
+"""history_page.py - страница /history: просмотр CSV-истории (график, итоги, аварии, события, направление вращения)."""
 import csv
+from bisect import bisect_left, bisect_right
 from datetime import datetime
 from pathlib import Path
 
+from drive_alarms import alarm_symbol, alarm_text
+
 MAX_POINTS = 2500             # максимум точек на графике (остальное усредняется)
-MAX_EVENTS = 200
+MAX_EVENTS = 5000             # максимум событий в таблице (старые не обрезаем: аварию надо находить)
 GAP_SEC = 5                   # разрыв между строками больше N секунд не считается временем работы
 FMT = "%Y-%m-%d %H:%M:%S"
 MOVING_HZ = 0.05              # выше этой частоты считаем, что вал вращается
+ZOOM_POINTS = 30              # при клике по аварии/событию показываем +-N точек вокруг него
+ALARM_MARKERS = ("Состояние привода", "Ошибки и предупреждения", "Пуск запрещён", "Отказ")
 
 TOOLTIP_JS = """params => {
   const p = params[0];
@@ -18,6 +23,7 @@ TOOLTIP_JS = """params => {
   });
   const d = p.data;
   if (d && d.dir) { s += '<br/><span style="color:' + d.col + '">&#9679;</span> <b>' + d.dir + '</b>'; }
+  if (d && d.alm) { s += '<br/><span style="color:#ff5d6c">&#9679;</span> <b>Авария: ' + d.alm + '</b>'; }
   return s;
 }"""
 
@@ -120,22 +126,48 @@ def reverse_segments(labels, rows):
         segs.append((start, last))
     return segs
 
+def alarm_events(rows):
+    """Аварии по полным данным: смена кода тоже начинает новую запись.
+    [{code, t_start, t_end, open}]; open=True - авария не снята до конца записи."""
+    out, cur = [], None
+    for r in rows:
+        a = r["alarm"]
+        if cur is not None and a != cur["code"]:
+            cur["t_end"] = r["t"]; out.append(cur); cur = None
+        if a != 0 and cur is None:
+            cur = {"code": a, "t_start": r["t"], "t_end": None, "open": False}
+    if cur is not None:
+        cur["t_end"] = rows[-1]["t"]; cur["open"] = True; out.append(cur)
+    return out
+
+def time_index(times, t):
+    """Индекс точки графика, в которую попадает момент t (последняя точка не позже t)."""
+    if not times:
+        return 0
+    return max(0, min(len(times) - 1, bisect_right(times, t) - 1))
+
+def is_alarm_event(msg):
+    return msg.startswith(ALARM_MARKERS)
+
+def filter_events(ev, newest_first=True, only_alarms=False, text=""):
+    """ev - список (время, сообщение) в порядке записи. Возвращает отфильтрованный и отсортированный список."""
+    q = (text or "").strip().lower()
+    out = [e for e in ev if (not only_alarms or is_alarm_event(e[1])) and (not q or q in e[1].lower() or q in e[0])]
+    out = out[-MAX_EVENTS:]
+    return list(reversed(out)) if newest_first else out
+
 def stats(rows):
     fs = [r["f"] for r in rows if r["f"] is not None]
     is_ = [r["i"] for r in rows if r["i"] is not None]
-    run, rev, alarms, prev_alarm = 0.0, 0.0, 0, 0
+    run, rev = 0.0, 0.0
     for a, b in zip(rows, rows[1:]):
         dt = (b["t"] - a["t"]).total_seconds()
         if (a["f"] or 0) > MOVING_HZ and (b["f"] or 0) > MOVING_HZ and 0 < dt <= GAP_SEC:
             run += dt
             if a["mode"] == "РЕВЕРС":
                 rev += dt
-    for r in rows:
-        if r["alarm"] != 0 and prev_alarm == 0:
-            alarms += 1
-        prev_alarm = r["alarm"]
     return {"max_f": max(fs) if fs else 0.0, "max_i": max(is_) if is_ else 0.0,
-            "run_sec": int(run), "rev_sec": int(rev), "alarms": alarms, "n": len(rows)}
+            "run_sec": int(run), "rev_sec": int(rev), "alarms": len(alarm_events(rows)), "n": len(rows)}
 
 def fmt_hms(sec):
     return f"{sec // 3600:d}:{sec % 3600 // 60:02d}:{sec % 60:02d}"
@@ -176,8 +208,11 @@ def register(css, history_dir, link_html, C):
                     stat_boxes[key] = (ui.html("").style("margin-top:6px"), color)
 
         with ui.element("div").classes("card").style("width:100%"):
-            ui.label("ЧАСТОТА И ТОК (колесо мыши - масштаб; жёлтая заливка - реверс; "
-                     "направление показывается при наведении)").classes("cap")
+            with ui.row().style("width:100%;justify-content:space-between;align-items:center"):
+                ui.label("ЧАСТОТА И ТОК (колесо мыши - масштаб; жёлтая заливка - реверс; красная - авария; "
+                         "красная линия - момент аварии)").classes("cap")
+                ui.button("ПОКАЗАТЬ ВСЁ", on_click=lambda: zoom_all()).props("flat dense") \
+                    .style(f"color:{C['TXT']};font-weight:700")
             chart = ui.echart({
                 "animation": False,
                 "tooltip": {"trigger": "axis", ":formatter": TOOLTIP_JS},
@@ -193,7 +228,10 @@ def register(css, history_dir, link_html, C):
                 "series": [
                     {"name": "Частота, Гц", "type": "line", "showSymbol": False, "data": [],
                      "lineStyle": {"color": C["BLUE"], "width": 2}, "itemStyle": {"color": C["BLUE"]},
-                     "markArea": {"silent": True, "data": []}},
+                     "markArea": {"silent": True, "data": []},
+                     "markLine": {"silent": True, "symbol": ["none", "none"], "data": [],
+                                  "label": {"show": True, "formatter": "{b}", "color": C["RED"],
+                                            "fontWeight": "bold", "position": "end"}}},
                     {"name": "Уставка, Гц", "type": "line", "showSymbol": False, "data": [],
                      "lineStyle": {"color": C["AMBER"], "width": 1, "type": "dashed"},
                      "itemStyle": {"color": C["AMBER"]}},
@@ -202,16 +240,58 @@ def register(css, history_dir, link_html, C):
                 ]}).style("height:400px;width:100%")
 
         with ui.element("div").classes("card").style("width:100%"):
-            ui.label("СОБЫТИЯ ЗА ДЕНЬ (новые сверху)").classes("cap")
+            ui.label("АВАРИИ ЗА ДЕНЬ (клик по строке - показать на графике; клик по заголовку - сортировка)").classes("cap")
+            alarm_table = ui.table(columns=[
+                {"name": "t", "label": "Время", "field": "t", "align": "left", "sortable": True},
+                {"name": "d", "label": "Длительность", "field": "d", "align": "left", "sortable": True},
+                {"name": "c", "label": "Код", "field": "c", "align": "left", "sortable": True},
+                {"name": "m", "label": "Описание", "field": "m", "align": "left", "sortable": True}],
+                rows=[], row_key="k", pagination=10).props('dark flat dense no-data-label="Аварий нет"') \
+                .style("width:100%;background:transparent")
+
+        with ui.element("div").classes("card").style("width:100%"):
+            ui.label("СОБЫТИЯ ЗА ДЕНЬ (клик по строке - показать на графике)").classes("cap")
+            with ui.row().style("gap:16px;align-items:center;margin:8px 0;flex-wrap:wrap"):
+                order = ui.toggle(["Новые сверху", "Старые сверху"], value="Новые сверху").props("dense")
+                only_alm = ui.checkbox("Только аварии")
+                search = ui.input(placeholder="Поиск по событиям").props("outlined dark dense clearable") \
+                    .style("min-width:240px")
+                ev_count = ui.label("").classes("cap")
             table = ui.table(columns=[
-                {"name": "t", "label": "Время", "field": "t", "align": "left"},
-                {"name": "m", "label": "Событие", "field": "m", "align": "left"}],
+                {"name": "t", "label": "Время", "field": "t", "align": "left", "sortable": True},
+                {"name": "m", "label": "Событие", "field": "m", "align": "left", "sortable": True}],
                 rows=[], row_key="k", pagination=10).props("dark flat dense").style("width:100%;background:transparent")
+
+        data = {"events": [], "alarms": [], "labels": []}
 
         def set_stat(key, text, unit=""):
             box, color = stat_boxes[key]
             u = f'<span class="unit">{unit}</span>' if unit else ""
             box.set_content(f'<span class="big" style="color:{color}">{text}</span>{u}')
+
+        def zoom_all():
+            try:
+                chart.run_chart_method("dispatchAction", {"type": "dataZoom", "start": 0, "end": 100})
+            except Exception as e:
+                ui.notify(f"Масштаб: {e!r}", type="warning")
+
+        def zoom_to(tstr):
+            labels = data["labels"]
+            if not labels:
+                return
+            i = min(bisect_left(labels, tstr), len(labels) - 1)
+            a, b = max(0, i - ZOOM_POINTS), min(len(labels) - 1, i + ZOOM_POINTS)
+            n = max(1, len(labels) - 1)
+            try:
+                chart.run_chart_method("dispatchAction", {"type": "dataZoom", "start": 100 * a / n, "end": 100 * b / n})
+            except Exception as e:
+                ui.notify(f"Масштаб: {e!r}", type="warning")
+
+        def render_events():
+            sel_rows = filter_events(data["events"], order.value == "Новые сверху", only_alm.value, search.value)
+            table.rows = [{"k": k, "t": t, "m": m} for k, (t, m) in enumerate(sel_rows)]
+            table.update()
+            ev_count.set_text(f"показано {len(sel_rows)} из {len(data['events'])}")
 
         def load():
             d = sel.value
@@ -232,21 +312,37 @@ def register(css, history_dir, link_html, C):
             set_stat("i", f"{st['max_i']:.2f}", "А")
             set_stat("a", str(st["alarms"]))
             labels = [r["t"].strftime("%H:%M:%S") for r in small]
+            times = [r["t"] for r in small]
+            data["labels"] = labels
             fdata = []
             for r in small:
                 text, _key, col = direction(r["mode"], r["f"])
-                fdata.append({"value": None if r["f"] is None else round(r["f"], 2), "dir": text, "col": col})
+                fdata.append({"value": None if r["f"] is None else round(r["f"], 2), "dir": text, "col": col,
+                              "alm": alarm_text(r["alarm"]) if r["alarm"] else ""})
+            alarms = alarm_events(rows)
+            area = [[{"xAxis": a, "itemStyle": {"color": "rgba(255,184,77,0.18)"}}, {"xAxis": b}]
+                    for a, b in reverse_segments(labels, small)]
+            lines, arows = [], []
+            for k, ev in enumerate(alarms):
+                i0, i1 = time_index(times, ev["t_start"]), time_index(times, ev["t_end"])
+                area.append([{"xAxis": labels[i0], "itemStyle": {"color": "rgba(255,93,108,0.20)"}}, {"xAxis": labels[i1]}])
+                lines.append({"xAxis": labels[i0], "name": alarm_symbol(ev["code"]),
+                              "lineStyle": {"color": C["RED"], "width": 2, "type": "solid"}})
+                dur = int((ev["t_end"] - ev["t_start"]).total_seconds())
+                arows.append({"k": k, "t": ev["t_start"].strftime("%H:%M:%S"),
+                              "d": ("до конца записи" if ev["open"] else fmt_hms(dur)),
+                              "c": alarm_symbol(ev["code"]), "m": alarm_text(ev["code"])})
             chart.options["xAxis"]["data"] = labels
             chart.options["series"][0]["data"] = fdata
-            chart.options["series"][0]["markArea"]["data"] = [
-                [{"xAxis": a, "itemStyle": {"color": "rgba(255,184,77,0.18)"}}, {"xAxis": b}]
-                for a, b in reverse_segments(labels, small)]
+            chart.options["series"][0]["markArea"]["data"] = area
+            chart.options["series"][0]["markLine"]["data"] = lines
             chart.options["series"][1]["data"] = [None if r["sp"] is None else round(r["sp"], 1) for r in small]
             chart.options["series"][2]["data"] = [None if r["i"] is None else round(r["i"], 2) for r in small]
             chart.update()
-            ev = read_events(history_dir / f"events_{d}.csv")
-            table.rows = [{"k": k, "t": t, "m": m} for k, (t, m) in enumerate(reversed(ev[-MAX_EVENTS:]))]
-            table.update()
+            alarm_table.rows = arows
+            alarm_table.update()
+            data["events"] = read_events(history_dir / f"events_{d}.csv")
+            render_events()
 
         def reload_dates():
             ds = list_dates(history_dir)
@@ -262,6 +358,11 @@ def register(css, history_dir, link_html, C):
             except AttributeError:
                 ui.download(p.read_bytes(), p.name)
 
+        alarm_table.on("rowClick", lambda e: zoom_to(e.args[1]["t"]))
+        table.on("rowClick", lambda e: zoom_to(e.args[1]["t"]))
+        order.on_value_change(lambda e: render_events())
+        only_alm.on_value_change(lambda e: render_events())
+        search.on_value_change(lambda e: render_events())
         sel.on_value_change(lambda e: load())
         load()
         opc_lbl.set_content(link_html())
