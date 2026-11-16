@@ -2,3 +2,4 @@
 __pycache__/
 phone_pin.txt
 phone_pin.txt
+blocked_ips.json

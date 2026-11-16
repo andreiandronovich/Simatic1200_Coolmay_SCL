@@ -1,8 +1,11 @@
 """mobile_page.py - страница /m: просмотр и управление с телефона (управление - по PIN-коду).
 Пока управление заблокировано, кнопок нет (при STOP_NEEDS_PIN = True нет и кнопки СТОП).
 С любых адресов, кроме самого ПК, открывается только /m (остальные страницы возвращают 403).
-Список подключённых устройств виден на ПК: кнопка devices_button() в шапке.
+На ПК: devices_button() в шапке - список устройств, отключение по IP, список заблокированных.
 """
+import asyncio
+import ipaddress
+import json
 import time
 from pathlib import Path
 
@@ -24,7 +27,10 @@ SLIDER_PAUSE = 0.6            # пауза после движения полз�
 
 _fails = {}                   # ip -> (число ошибок, время, до которого заблокирован)
 _viewers = {}                 # id страницы -> данные устройства
-_last_log = {}                # ip -> время последней записи о подключении
+_blocked = set()              # заблокированные IP (хранятся в blocked_ips.json)
+_log = None                   # функция журнала панели (задаётся в register)
+_C = {}                       # цвета панели
+_block_path = None
 
 def lan_urls(port):
     out = []
@@ -79,29 +85,100 @@ def fmt_dur(sec):
     return f"{sec} с" if sec < 60 else f"{sec // 60} мин" if sec < 3600 else f"{sec // 3600} ч {sec % 3600 // 60} мин"
 
 def viewers(now=None):
-    """Список подключённых устройств страницы /m (без устаревших записей)."""
+    """Список подключённых устройств страницы /m."""
     now = time.time() if now is None else now
-    for k in [k for k, v in _viewers.items() if now - v["seen"] > ONLINE_SEC * 4]:
-        _viewers.pop(k, None)
     out = [{"ip": v["ip"], "device": v["device"], "dur": fmt_dur(now - v["since"]),
             "unlocked": v["unlocked"]} for v in _viewers.values() if now - v["seen"] <= ONLINE_SEC]
     return sorted(out, key=lambda x: x["ip"])
 
-def devices_button(border, txt, card, dim="#7b869e", green="#3ddc84"):
-    """Кнопка в шапке ПК: число подключённых устройств; по клику - список (адрес, устройство, время, доступ)."""
+def load_blocked():
+    global _blocked
+    try:
+        _blocked = set(json.loads(Path(_block_path).read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        _blocked = set()
+
+def save_blocked():
+    try:
+        Path(_block_path).write_text(json.dumps(sorted(_blocked), indent=1), encoding="utf-8")
+    except OSError as e:
+        print("Не удалось сохранить blocked_ips.json:", repr(e))
+
+def block_ip(ip):
+    """(успех, сообщение). Локальный адрес ПК заблокировать нельзя."""
+    try:
+        ip = str(ipaddress.ip_address(ip.strip()))
+    except ValueError:
+        return False, "Неверный IP-адрес"
+    if is_local(ip):
+        return False, "Адрес самого ПК блокировать нельзя"
+    if ip in _blocked:
+        return False, "Адрес уже заблокирован"
+    _blocked.add(ip); save_blocked()
+    if _log:
+        _log(f"Устройство заблокировано: {ip}", _C.get("RED", "#ff5d6c"))
+    return True, ""
+
+def unblock_ip(ip):
+    if ip in _blocked:
+        _blocked.discard(ip); save_blocked()
+        if _log:
+            _log(f"Устройство разблокировано: {ip}", _C.get("GREEN", "#3ddc84"))
+
+def sweep(now=None):
+    """Убирает отключившиеся устройства и пишет в журнал 'Устройство отключено'."""
+    now = time.time() if now is None else now
+    for k, v in list(_viewers.items()):
+        if now - v["seen"] > ONLINE_SEC:
+            _viewers.pop(k, None)
+            alive = any(w["ip"] == v["ip"] and now - w["seen"] <= ONLINE_SEC for w in _viewers.values())
+            if not alive and _log:
+                _log(f"Устройство отключено: {v['ip']} ({v['device']})", _C.get("DIM", "#7b869e"))
+
+def devices_button(border, txt, card, dim="#7b869e", green="#3ddc84", red="#ff5d6c"):
+    """Кнопка в шапке ПК: число устройств; по клику - список, отключение по IP, заблокированные адреса."""
     from nicegui import ui
 
     def show():
-        with ui.dialog() as dlg, ui.card().style(f"background:{card};min-width:460px;border:1px solid {border}"):
-            ui.label("ПОДКЛЮЧЁННЫЕ УСТРОЙСТВА (страница /m)").style(f"color:{dim};font-size:13px")
-            vs = viewers()
-            if not vs:
-                ui.label("Сейчас никого нет.").style(f"color:{txt}")
-            for v in vs:
-                access = "управление разблокировано" if v["unlocked"] else "только просмотр"
-                col = green if v["unlocked"] else txt
-                ui.label(f'{v["ip"]}   {v["device"]}   в сети {v["dur"]}   {access}').style(f"color:{col};font-size:15px")
-            ui.button("Закрыть", on_click=dlg.close).props("flat")
+        with ui.dialog() as dlg, ui.card().style(f"background:{card};min-width:480px;border:1px solid {border}"):
+            @ui.refreshable
+            def body():
+                ui.label("ПОДКЛЮЧЁННЫЕ УСТРОЙСТВА (страница /m)").style(f"color:{dim};font-size:13px")
+                vs = viewers()
+                if not vs:
+                    ui.label("Сейчас никого нет.").style(f"color:{txt}")
+                for v in vs:
+                    access = "управление" if v["unlocked"] else "просмотр"
+                    with ui.row().style("align-items:center;width:100%;justify-content:space-between;flex-wrap:nowrap"):
+                        ui.label(f'{v["ip"]}   {v["device"]}   {v["dur"]}   {access}') \
+                            .style(f'color:{green if v["unlocked"] else txt};font-size:15px')
+                        ui.button("ОТКЛЮЧИТЬ", on_click=lambda ip=v["ip"]: do_block(ip)).props("flat dense").style(f"color:{red}")
+                ui.separator()
+                ui.label("ЗАБЛОКИРОВАННЫЕ АДРЕСА").style(f"color:{dim};font-size:13px")
+                if not _blocked:
+                    ui.label("Список пуст.").style(f"color:{txt}")
+                for ip in sorted(_blocked):
+                    with ui.row().style("align-items:center;width:100%;justify-content:space-between;flex-wrap:nowrap"):
+                        ui.label(ip).style(f"color:{txt};font-size:15px")
+                        ui.button("ВЕРНУТЬ", on_click=lambda ip=ip: do_unblock(ip)).props("flat dense").style(f"color:{green}")
+                with ui.row().style("align-items:center;width:100%;flex-wrap:nowrap"):
+                    ip_in = ui.input(placeholder="например 192.168.0.25").props("outlined dark dense").style("flex:1")
+                    ui.button("ЗАБЛОКИРОВАТЬ", on_click=lambda: do_block(ip_in.value or "")).props("flat dense").style(f"color:{red}")
+
+            def do_block(ip):
+                ok, msg = block_ip(ip)
+                if not ok:
+                    ui.notify(msg, type="warning")
+                body.refresh()
+
+            def do_unblock(ip):
+                unblock_ip(ip)
+                body.refresh()
+
+            body()
+            with ui.row():
+                ui.button("Обновить", on_click=body.refresh).props("flat")
+                ui.button("Закрыть", on_click=dlg.close).props("flat")
         dlg.open()
 
     btn = ui.button("УСТРОЙСТВА: 0", on_click=show) \
@@ -109,23 +186,38 @@ def devices_button(border, txt, card, dim="#7b869e", green="#3ddc84"):
 
     def upd():
         n = len(viewers())
-        btn.set_text(f"УСТРОЙСТВА: {n}")
+        btn.set_text(f"УСТРОЙСТВА: {n}" + (f" / ЗАБЛ.: {len(_blocked)}" if _blocked else ""))
     upd()
     ui.timer(2.0, upd)
     return btn
 
 def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
              pending_cmds, slider_edit, log, max_hz, pin_file):
+    global _log, _C, _block_path
     from nicegui import app, ui
     from starlette.requests import Request
     from starlette.responses import PlainTextResponse
 
+    _log, _C = log, C
+    _block_path = Path(pin_file).resolve().parent / "blocked_ips.json"
+    load_blocked()
     pin = load_pin(pin_file)
+
+    async def _sweeper():
+        while True:
+            await asyncio.sleep(2)
+            try:
+                sweep()
+            except Exception as e:
+                print("sweep:", repr(e))
+    app.on_startup(lambda: asyncio.create_task(_sweeper()))
 
     @app.middleware("http")
     async def view_only_guard(request, call_next):
         host = request.client.host if request.client else ""
         p = request.url.path
+        if host in _blocked and not is_local(host):
+            return PlainTextResponse("Доступ отключён администратором", status_code=403)
         if is_local(host) or p == "/m" or p.startswith("/m/") or p.startswith("/_nicegui") \
                 or p.startswith("/static") or p == "/favicon.ico":
             return await call_next(request)
@@ -136,7 +228,7 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
         print(f"  {name}: {url}")
     print("  Управление с телефона:", "включено (PIN из phone_pin.txt)" if pin
           else "ВЫКЛЮЧЕНО - создай opc_client\\phone_pin.txt с PIN (минимум 4 символа)")
-    print()
+    print(f"  Заблокированных адресов: {len(_blocked)}\n")
 
     def card_html(label, value, color, unit=""):
         u = f'<span class="unit">{unit}</span>' if unit else ""
@@ -151,7 +243,7 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
         dev = device_name(ua)
         ui.add_css(css + MOBILE_CSS)
         ctl = {"until": 0.0}
-        edit = {"v": None, "t": 0.0}             # движение ползунка на этом телефоне
+        edit = {"v": None, "t": 0.0}
 
         def unlocked():
             return time.time() < ctl["until"]
@@ -160,6 +252,8 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
             ctl["until"] = time.time() + UNLOCK_SEC
 
         def send(name, text, *arg):
+            if ip in _blocked:
+                return
             if name != "stop" or STOP_NEEDS_PIN:
                 if not unlocked():
                     ui.notify("Сначала введи PIN", type="warning"); return
@@ -169,12 +263,12 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
             log(f"Телефон ({ip}): {text}", C["AMBER"])
             pending_cmds.append((name, *arg))
 
-        _viewers[cid] = {"ip": ip, "device": dev, "since": time.time(), "seen": time.time(), "unlocked": False}
-        if time.time() - _last_log.get(ip, 0) > 60:
+        now0 = time.time()
+        if not any(w["ip"] == ip and now0 - w["seen"] <= ONLINE_SEC for w in _viewers.values()):
             log(f"Подключено устройство: {ip} ({dev})", C["BLUE"])
-        _last_log[ip] = time.time()
+        _viewers[cid] = {"ip": ip, "device": dev, "since": now0, "seen": now0, "unlocked": False}
         try:
-            ui.context.client.on_disconnect(lambda: _viewers.pop(cid, None))
+            ui.context.client.on_disconnect(lambda: _viewers.get(cid, {}).update(seen=0))
         except Exception:
             pass
 
@@ -271,19 +365,22 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
 
         def refresh():
             s = state
+            if ip in _blocked:
+                ui.run_javascript("location.reload()")
+                return
             u = unlocked()
             v = _viewers.get(cid)
             if v is None:
                 v = _viewers[cid] = {"ip": ip, "device": dev, "since": time.time(), "seen": 0, "unlocked": False}
             v["seen"], v["unlocked"] = time.time(), u
+            running = s["mode"] in ("ВПЕРЁД", "РЕВЕРС") or s["freq"] > 0.05
+            if u and running:
+                touch()
             lock_card.set_visibility(not u)
             ctl_card.set_visibility(u)
             stop_btn.set_visibility(u or not STOP_NEEDS_PIN)
-            if u and (s["mode"] in ("ВПЕРЁД", "РЕВЕРС") or s["freq"] > 0.05):
-                touch()                              # пока двигатель крутится, СТОП должен оставаться доступным
             if u:
-                left_lbl.set_text("автоблокировка отключена, пока двигатель работает"
-                                  if (s["mode"] in ("ВПЕРЁД", "РЕВЕРС") or s["freq"] > 0.05)
+                left_lbl.set_text("автоблокировка отключена, пока двигатель работает" if running
                                   else f"автоблокировка через {int(ctl['until'] - time.time())} с")
                 idle = edit["v"] is None and time.time() - edit["t"] > 3
                 if s["link"] and idle and last_sp["v"] != s["setpoint"]:
