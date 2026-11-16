@@ -517,6 +517,8 @@ ALLOW_PHONE = True
 if ALLOW_PHONE:
     mobile_page.register(CSS, 8080, state, trend_f, trend_i, events, link_html, hb_html,
                          dict(BORDER=BORDER, TXT=TXT, DIM=DIM, GREEN=GREEN, RED=RED,
-                              BLUE=BLUE, AMBER=AMBER, PURPLE=PURPLE))
+                              BLUE=BLUE, AMBER=AMBER, PURPLE=PURPLE),
+                         pending_cmds, slider_edit, log, MAX_HZ,
+                         Path(__file__).resolve().parent / "phone_pin.txt")
 ui.run(title="Привод", host="0.0.0.0" if ALLOW_PHONE else "127.0.0.1",
        port=8080, dark=True, reload=False)
