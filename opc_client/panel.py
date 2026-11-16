@@ -57,6 +57,8 @@ trend_f, trend_i = deque(maxlen=TREND_SEC), deque(maxlen=TREND_SEC)
 events = deque(maxlen=5)
 pending_cmds = deque()        # ("start",), ("stop",), ("reverse",), ("reset",), ("freq", hz), ("acc", s), ("dec", s)
 slider_edit = {"value": None, "t": 0.0}
+diag = {"ok": 0, "err": 0, "reconnects": 0, "read_ms": None, "last_ok": 0.0,
+        "last_error": "", "last_error_t": 0.0, "raw": []}
 _warned = {"history": False}
 
 # ---------- история в CSV ----------
@@ -203,18 +205,24 @@ async def plc_loop():
             async with Client(url=URL, timeout=4) as client:
                 d = Drive(client)
                 state["link"] = True
+                diag["reconnects"] += 1
                 log("Подключено к ПЛК", GREEN)
                 while True:
                     n = n % 65535 + 1
                     await asyncio.wait_for(d.write_reg(HB_REG, n), 5)
                     state["hb"], state["hb_t"] = n, time.time()
                     await asyncio.wait_for(handle_cmds(d), 5)
-                    apply_regs(await asyncio.wait_for(d.regs(), 5))
+                    t0 = time.time()
+                    r = await asyncio.wait_for(d.regs(), 5)
+                    diag["read_ms"] = (time.time() - t0) * 1000
+                    diag["raw"] = list(r); diag["ok"] += 1; diag["last_ok"] = time.time()
+                    apply_regs(r)                   
                     await asyncio.sleep(1)
         except asyncio.CancelledError:
             raise
-        except BaseException:
+        except BaseException as e:
             traceback.print_exc()
+            diag["err"] += 1; diag["last_error"] = repr(e)[:300]; diag["last_error_t"] = time.time()
             if state["link"]:
                 log("Связь с ПЛК потеряна", RED)
             state["link"] = False
@@ -316,7 +324,8 @@ def index():
                 .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:10px")
             ui.button("ИСТОРИЯ", on_click=lambda: ui.navigate.to("/history")) \
                 .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:10px")
-
+            ui.button("ДИАГНОСТИКА", on_click=lambda: ui.navigate.to("/diagnostics")) \
+                .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:10px")
     with ui.element("div").classes("grid3"):
         with ui.element("div").classes("card"):
             ui.label("ЧАСТОТА, Гц").classes("cap")
@@ -500,4 +509,7 @@ import history_page
 history_page.register(CSS, HISTORY_DIR, link_html,
                       dict(BG=BG, CARD=CARD, BORDER=BORDER, TXT=TXT, DIM=DIM, GREEN=GREEN,
                            RED=RED, BLUE=BLUE, AMBER=AMBER, PURPLE=PURPLE))
+import diagnostics_page
+diagnostics_page.register(CSS, URL, state, diag, link_html, hb_html,
+                          dict(BORDER=BORDER, TXT=TXT, GREEN=GREEN, RED=RED))
 ui.run(title="Привод", host="127.0.0.1", port=8080, dark=True, reload=False)
