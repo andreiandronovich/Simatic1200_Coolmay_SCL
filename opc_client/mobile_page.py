@@ -1,13 +1,17 @@
-"""mobile_page.py - страница /m: просмотр и управление с телефона (управление - по PIN-коду).
+"""mobile_page.py - страница /m: просмотр и управление с телефона/компьютера (управление - по PIN-коду).
 Пока управление заблокировано, кнопок нет (при STOP_NEEDS_PIN = True нет и кнопки СТОП).
 С любых адресов, кроме самого ПК, открывается только /m (остальные страницы возвращают 403).
-На ПК: devices_button() в шапке - список устройств, отключение по IP, список заблокированных.
+На ПК: devices_button() в шапке - список устройств, отключение по IP, список заблокированных;
+       pin_settings_card() на странице параметров - смена PIN (сохраняется в phone_pin.txt).
 """
 import asyncio
 import ipaddress
 import json
+import os
 import time
 from pathlib import Path
+
+from drive_alarms import alarm_symbol, alarm_text
 
 MOBILE_CSS = """
 .m-wrap { width:100%; max-width:520px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
@@ -24,6 +28,7 @@ LOCK_SEC = 60
 STOP_NEEDS_PIN = True         # True: кнопка СТОП появляется только после ввода PIN
 ONLINE_SEC = 8                # устройство считается подключённым, если страница отвечала не позже N секунд назад
 SLIDER_PAUSE = 0.6            # пауза после движения ползунка, затем уставка отправляется
+PIN_MIN, PIN_MAX = 4, 32
 
 _fails = {}                   # ip -> (число ошибок, время, до которого заблокирован)
 _viewers = {}                 # id страницы -> данные устройства
@@ -31,6 +36,7 @@ _blocked = set()              # заблокированные IP (хранят�
 _log = None                   # функция журнала панели (задаётся в register)
 _C = {}                       # цвета панели
 _block_path = None
+_pin = {"value": "", "path": None, "epoch": 0}   # epoch растёт при смене PIN: все разблокированные сессии блокируются
 
 def lan_urls(port):
     out = []
@@ -49,10 +55,40 @@ def is_local(host):
 
 def load_pin(path):
     try:
-        pin = Path(path).read_text(encoding="utf-8").strip()
+        pin = Path(path).read_text(encoding="utf-8-sig").strip()
     except OSError:
         return ""
-    return pin if len(pin) >= 4 else ""
+    return pin if len(pin) >= PIN_MIN else ""
+
+def get_pin():
+    return _pin["value"]
+
+def set_pin(new, repeat=None):
+    """Сохраняет PIN в phone_pin.txt и применяет сразу. new='' - отключить управление. (успех, сообщение)."""
+    new = (new or "").strip()
+    if new:
+        if repeat is not None and new != (repeat or "").strip():
+            return False, "PIN и повтор не совпадают"
+        if not PIN_MIN <= len(new) <= PIN_MAX:
+            return False, f"PIN: от {PIN_MIN} до {PIN_MAX} символов"
+        if any(ch.isspace() for ch in new):
+            return False, "PIN не должен содержать пробелов"
+    path = _pin["path"]
+    if path is None:
+        return False, "Путь к phone_pin.txt не задан"
+    try:
+        tmp = Path(str(path) + ".tmp")
+        tmp.write_text(new, encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as e:
+        return False, f"Не удалось записать файл: {e}"
+    _pin["value"] = new
+    _pin["epoch"] += 1
+    _fails.clear()
+    if _log:
+        _log("PIN управления с телефона изменён" if new else "Управление с телефона отключено (PIN удалён)",
+             _C.get("AMBER", "#ffb84d"))
+    return True, ""
 
 def check_pin(ip, entered, expected, now=None):
     """(успех, сообщение). MAX_FAILS ошибок подряд -> блокировка адреса на LOCK_SEC секунд."""
@@ -71,14 +107,16 @@ def check_pin(ip, entered, expected, now=None):
     return False, f"Неверный PIN (попытка {n} из {MAX_FAILS})"
 
 def device_name(ua):
+    """Тип и система устройства по User-Agent. Ноутбук от настольного ПК по нему отличить нельзя."""
     u = (ua or "").lower()
-    if "iphone" in u: return "iPhone"
-    if "ipad" in u: return "iPad"
-    if "android" in u: return "Android"
-    if "windows" in u: return "Windows"
-    if "macintosh" in u or "mac os" in u: return "Mac"
-    if "linux" in u: return "Linux"
-    return "Браузер"
+    if "iphone" in u: return "Телефон iPhone"
+    if "ipad" in u: return "Планшет iPad"
+    if "android" in u: return "Телефон Android" if "mobile" in u else "Планшет Android"
+    if "windows" in u: return "Компьютер Windows"
+    if "macintosh" in u or "mac os" in u: return "Компьютер Mac"
+    if "cros" in u: return "Компьютер ChromeOS"
+    if "linux" in u: return "Компьютер Linux"
+    return "Устройство"
 
 def fmt_dur(sec):
     sec = int(sec)
@@ -135,12 +173,52 @@ def sweep(now=None):
             if not alive and _log:
                 _log(f"Устройство отключено: {v['ip']} ({v['device']})", _C.get("DIM", "#7b869e"))
 
+def pin_settings_card(border, txt, dim="#7b869e", green="#3ddc84", red="#ff5d6c", card="#1a2133"):
+    """Карточка для страницы параметров (она открывается только с самого ПК): смена PIN управления с телефона."""
+    from nicegui import ui
+    with ui.element("div").classes("card").style("width:100%"):
+        ui.label("PIN ДЛЯ УПРАВЛЕНИЯ С ТЕЛЕФОНА").classes("cap")
+        status = ui.label("").style(f"color:{txt};margin-top:6px;font-size:15px")
+        with ui.row().style("gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap"):
+            p1 = ui.input(label="Новый PIN", password=True, password_toggle_button=True) \
+                .props("outlined dark dense").style("min-width:220px")
+            p2 = ui.input(label="Повтор PIN", password=True, password_toggle_button=True) \
+                .props("outlined dark dense").style("min-width:220px")
+            ui.button("СОХРАНИТЬ PIN", on_click=lambda: save()) \
+                .style(f"background:{green}!important;color:#0b0f19;font-weight:700;border-radius:10px")
+            ui.button("ОТКЛЮЧИТЬ УПРАВЛЕНИЕ", on_click=lambda: disable()).props("flat") \
+                .style(f"color:{red};font-weight:700")
+        ui.label(f"От {PIN_MIN} до {PIN_MAX} символов, без пробелов. Сохраняется в файл phone_pin.txt рядом с panel.py "
+                 "и действует сразу: все уже разблокированные устройства блокируются и вводят новый PIN.") \
+            .classes("cap").style("margin-top:10px")
+
+        def show():
+            n = len(get_pin())
+            status.set_text(f"PIN задан ({n} симв.)" if n else "PIN не задан: управление с телефона выключено")
+
+        def save():
+            if not (p1.value or "").strip():
+                ui.notify("Введи новый PIN", type="negative"); return
+            ok, msg = set_pin(p1.value or "", p2.value or "")
+            if ok:
+                p1.set_value(""); p2.set_value("")
+                ui.notify("PIN сохранён", type="positive")
+            else:
+                ui.notify(msg, type="negative")
+            show()
+
+        def disable():
+            ok, msg = set_pin("")
+            ui.notify("Управление с телефона отключено" if ok else msg, type="warning" if ok else "negative")
+            show()
+        show()
+
 def devices_button(border, txt, card, dim="#7b869e", green="#3ddc84", red="#ff5d6c"):
     """Кнопка в шапке ПК: число устройств; по клику - список, отключение по IP, заблокированные адреса."""
     from nicegui import ui
 
     def show():
-        with ui.dialog() as dlg, ui.card().style(f"background:{card};min-width:480px;border:1px solid {border}"):
+        with ui.dialog() as dlg, ui.card().style(f"background:{card};min-width:520px;border:1px solid {border}"):
             @ui.refreshable
             def body():
                 ui.label("ПОДКЛЮЧЁННЫЕ УСТРОЙСТВА (страница /m)").style(f"color:{dim};font-size:13px")
@@ -201,7 +279,8 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
     _log, _C = log, C
     _block_path = Path(pin_file).resolve().parent / "blocked_ips.json"
     load_blocked()
-    pin = load_pin(pin_file)
+    _pin["path"] = Path(pin_file)
+    _pin["value"] = load_pin(pin_file)
 
     async def _sweeper():
         while True:
@@ -226,8 +305,8 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
     print("\nТелефон (телефон и ПК в одной сети Wi-Fi):")
     for name, url in lan_urls(port):
         print(f"  {name}: {url}")
-    print("  Управление с телефона:", "включено (PIN из phone_pin.txt)" if pin
-          else "ВЫКЛЮЧЕНО - создай opc_client\\phone_pin.txt с PIN (минимум 4 символа)")
+    print("  Управление с телефона:", "включено (PIN из phone_pin.txt)" if get_pin()
+          else "ВЫКЛЮЧЕНО - задай PIN на странице параметров или в opc_client\\phone_pin.txt")
     print(f"  Заблокированных адресов: {len(_blocked)}\n")
 
     def card_html(label, value, color, unit=""):
@@ -242,11 +321,11 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
         cid = ui.context.client.id
         dev = device_name(ua)
         ui.add_css(css + MOBILE_CSS)
-        ctl = {"until": 0.0}
+        ctl = {"until": 0.0, "epoch": -1}
         edit = {"v": None, "t": 0.0}
 
         def unlocked():
-            return time.time() < ctl["until"]
+            return time.time() < ctl["until"] and ctl["epoch"] == _pin["epoch"] and bool(get_pin())
 
         def touch():
             ctl["until"] = time.time() + UNLOCK_SEC
@@ -260,7 +339,7 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
                 touch()
             if not state["link"]:
                 ui.notify("Нет связи с ПЛК", type="negative"); return
-            log(f"Телефон ({ip}): {text}", C["AMBER"])
+            log(f"{dev} ({ip}): {text}", C["AMBER"])
             pending_cmds.append((name, *arg))
 
         now0 = time.time()
@@ -290,23 +369,24 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
             lock_card = ui.element("div").classes("card")
             with lock_card:
                 ui.label("УПРАВЛЕНИЕ ЗАБЛОКИРОВАНО").classes("cap")
-                if pin:
+                pin_box = ui.element("div").style("width:100%")
+                with pin_box:
                     pin_in = ui.input(label="PIN", password=True, password_toggle_button=True) \
                         .props("outlined dark dense").style("width:100%;margin-top:8px")
 
                     def do_unlock():
-                        ok, msg = check_pin(ip, pin_in.value or "", pin)
+                        ok, msg = check_pin(ip, pin_in.value or "", get_pin())
                         pin_in.set_value("")
                         if ok:
-                            touch(); log(f"Телефон ({ip}): управление разблокировано", C["AMBER"])
+                            ctl["epoch"] = _pin["epoch"]; touch()
+                            log(f"{dev} ({ip}): управление разблокировано", C["AMBER"])
                         else:
                             ui.notify(msg, type="negative")
                     pin_in.on("keydown.enter", do_unlock)
                     ui.button("РАЗБЛОКИРОВАТЬ", on_click=do_unlock).classes("m-btn") \
                         .style(f"background:{C['BORDER']}!important;color:{C['TXT']};margin-top:10px")
-                else:
-                    ui.label("Управление с телефона выключено: на ПК не задан PIN (файл phone_pin.txt).") \
-                        .classes("cap").style("margin-top:8px")
+                nopin_lbl = ui.label("Управление выключено: на ПК не задан PIN (страница параметров).") \
+                    .classes("cap").style("margin-top:8px")
 
             ctl_card = ui.element("div").classes("card")
             with ctl_card:
@@ -376,7 +456,10 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
             running = s["mode"] in ("ВПЕРЁД", "РЕВЕРС") or s["freq"] > 0.05
             if u and running:
                 touch()
+            has_pin = bool(get_pin())
             lock_card.set_visibility(not u)
+            pin_box.set_visibility(has_pin)
+            nopin_lbl.set_visibility(not has_pin)
             ctl_card.set_visibility(u)
             stop_btn.set_visibility(u or not STOP_NEEDS_PIN)
             if u:
@@ -400,8 +483,12 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
             cur_box.set_content(card_html("ТОК", f'{s["current"]:.2f}', C["PURPLE"], "А"))
             vol_box.set_content(card_html("НАПРЯЖЕНИЕ", f'{s["voltage"]:.1f}', C["BLUE"], "В"))
             a = s["alarm"]
-            alm_box.set_content(card_html("АВАРИЯ", "нет" if a == 0 else f"код {a}",
-                                          C["GREEN"] if a == 0 else C["RED"]))
+            if a == 0:
+                alm_box.set_content(card_html("АВАРИЯ", "нет", C["GREEN"]))
+            else:
+                alm_box.set_content(
+                    card_html("АВАРИЯ", alarm_symbol(a), C["RED"])
+                    + f'<div class="cap" style="margin-top:6px;font-size:12px">{alarm_text(a)}</div>')
             acc = "—" if s["acc"] is None else f'{s["acc"]:.1f}'
             dec = "—" if s["dec"] is None else f'{s["dec"]:.1f}'
             tm_box.set_content(f'<div class="cap">РАЗГОН / ТОРМОЖ., с</div><div style="margin-top:6px">'
