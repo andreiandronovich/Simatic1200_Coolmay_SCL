@@ -326,6 +326,7 @@ def index():
                 .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:10px")
             ui.button("ДИАГНОСТИКА", on_click=lambda: ui.navigate.to("/diagnostics")) \
                 .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:10px")
+            mobile_page.devices_button(BORDER, TXT, CARD)
     with ui.element("div").classes("grid3"):
         with ui.element("div").classes("card"):
             ui.label("ЧАСТОТА, Гц").classes("cap")

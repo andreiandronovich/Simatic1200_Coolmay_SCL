@@ -1,6 +1,7 @@
 """mobile_page.py - страница /m: просмотр и управление с телефона (управление - по PIN-коду).
-Остановка (СТОП) доступна всегда. ПУСК/РЕВЕРС/СБРОС/уставка - только после ввода PIN из файла phone_pin.txt.
+Пока управление заблокировано, кнопок нет (при STOP_NEEDS_PIN = True нет и кнопки СТОП).
 С любых адресов, кроме самого ПК, открывается только /m (остальные страницы возвращают 403).
+Список подключённых устройств виден на ПК: кнопка devices_button() в шапке.
 """
 import time
 from pathlib import Path
@@ -17,9 +18,13 @@ MOBILE_CSS = """
 UNLOCK_SEC = 120              # через столько секунд без действий управление блокируется снова
 MAX_FAILS = 5                 # неверных PIN подряд до временной блокировки адреса
 LOCK_SEC = 60
-STOP_NEEDS_PIN = True        # True: и СТОП с телефона только после ввода PIN
+STOP_NEEDS_PIN = True         # True: кнопка СТОП появляется только после ввода PIN
+ONLINE_SEC = 8                # устройство считается подключённым, если страница отвечала не позже N секунд назад
+SLIDER_PAUSE = 0.6            # пауза после движения ползунка, затем уставка отправляется
 
 _fails = {}                   # ip -> (число ошибок, время, до которого заблокирован)
+_viewers = {}                 # id страницы -> данные устройства
+_last_log = {}                # ip -> время последней записи о подключении
 
 def lan_urls(port):
     out = []
@@ -44,7 +49,7 @@ def load_pin(path):
     return pin if len(pin) >= 4 else ""
 
 def check_pin(ip, entered, expected, now=None):
-    """(успех, сообщение). Ограничивает перебор: MAX_FAILS ошибок -> блокировка адреса на LOCK_SEC секунд."""
+    """(успех, сообщение). MAX_FAILS ошибок подряд -> блокировка адреса на LOCK_SEC секунд."""
     now = time.time() if now is None else now
     n, locked_until = _fails.get(ip, (0, 0.0))
     if now < locked_until:
@@ -58,6 +63,56 @@ def check_pin(ip, entered, expected, now=None):
         return False, f"Неверный PIN. Адрес заблокирован на {LOCK_SEC} с"
     _fails[ip] = (n, 0.0)
     return False, f"Неверный PIN (попытка {n} из {MAX_FAILS})"
+
+def device_name(ua):
+    u = (ua or "").lower()
+    if "iphone" in u: return "iPhone"
+    if "ipad" in u: return "iPad"
+    if "android" in u: return "Android"
+    if "windows" in u: return "Windows"
+    if "macintosh" in u or "mac os" in u: return "Mac"
+    if "linux" in u: return "Linux"
+    return "Браузер"
+
+def fmt_dur(sec):
+    sec = int(sec)
+    return f"{sec} с" if sec < 60 else f"{sec // 60} мин" if sec < 3600 else f"{sec // 3600} ч {sec % 3600 // 60} мин"
+
+def viewers(now=None):
+    """Список подключённых устройств страницы /m (без устаревших записей)."""
+    now = time.time() if now is None else now
+    for k in [k for k, v in _viewers.items() if now - v["seen"] > ONLINE_SEC * 4]:
+        _viewers.pop(k, None)
+    out = [{"ip": v["ip"], "device": v["device"], "dur": fmt_dur(now - v["since"]),
+            "unlocked": v["unlocked"]} for v in _viewers.values() if now - v["seen"] <= ONLINE_SEC]
+    return sorted(out, key=lambda x: x["ip"])
+
+def devices_button(border, txt, card, dim="#7b869e", green="#3ddc84"):
+    """Кнопка в шапке ПК: число подключённых устройств; по клику - список (адрес, устройство, время, доступ)."""
+    from nicegui import ui
+
+    def show():
+        with ui.dialog() as dlg, ui.card().style(f"background:{card};min-width:460px;border:1px solid {border}"):
+            ui.label("ПОДКЛЮЧЁННЫЕ УСТРОЙСТВА (страница /m)").style(f"color:{dim};font-size:13px")
+            vs = viewers()
+            if not vs:
+                ui.label("Сейчас никого нет.").style(f"color:{txt}")
+            for v in vs:
+                access = "управление разблокировано" if v["unlocked"] else "только просмотр"
+                col = green if v["unlocked"] else txt
+                ui.label(f'{v["ip"]}   {v["device"]}   в сети {v["dur"]}   {access}').style(f"color:{col};font-size:15px")
+            ui.button("Закрыть", on_click=dlg.close).props("flat")
+        dlg.open()
+
+    btn = ui.button("УСТРОЙСТВА: 0", on_click=show) \
+        .style(f"background:{border}!important;color:{txt};font-weight:700;border-radius:10px")
+
+    def upd():
+        n = len(viewers())
+        btn.set_text(f"УСТРОЙСТВА: {n}")
+    upd()
+    ui.timer(2.0, upd)
+    return btn
 
 def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
              pending_cmds, slider_edit, log, max_hz, pin_file):
@@ -91,8 +146,12 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
     @ui.page("/m")
     def mobile(request: Request):
         ip = request.client.host if request.client else "?"
+        ua = request.headers.get("user-agent", "")
+        cid = ui.context.client.id
+        dev = device_name(ua)
         ui.add_css(css + MOBILE_CSS)
-        ctl = {"until": 0.0}                     # время окончания разблокировки (на этой странице)
+        ctl = {"until": 0.0}
+        edit = {"v": None, "t": 0.0}             # движение ползунка на этом телефоне
 
         def unlocked():
             return time.time() < ctl["until"]
@@ -110,6 +169,15 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
             log(f"Телефон ({ip}): {text}", C["AMBER"])
             pending_cmds.append((name, *arg))
 
+        _viewers[cid] = {"ip": ip, "device": dev, "since": time.time(), "seen": time.time(), "unlocked": False}
+        if time.time() - _last_log.get(ip, 0) > 60:
+            log(f"Подключено устройство: {ip} ({dev})", C["BLUE"])
+        _last_log[ip] = time.time()
+        try:
+            ui.context.client.on_disconnect(lambda: _viewers.pop(cid, None))
+        except Exception:
+            pass
+
         with ui.element("div").classes("m-wrap"):
             with ui.element("div").classes("card").style("display:flex;justify-content:space-between;align-items:center"):
                 ui.label("ПРИВОД").style("font-size:20px;font-weight:700")
@@ -122,7 +190,7 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
                 freq_lbl = ui.html("").style("margin-top:6px")
                 sp_lbl = ui.html("").style("margin-top:8px")
 
-            ui.button("СТОП", on_click=lambda: send("stop", "стоп")).classes("m-btn") \
+            stop_btn = ui.button("СТОП", on_click=lambda: send("stop", "стоп")).classes("m-btn") \
                 .style(f"background:{C['RED']}!important;color:#fff")
 
             lock_card = ui.element("div").classes("card")
@@ -163,14 +231,18 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
                 ui.label(f"Уставка, Гц (0–{max_hz:g})").classes("cap").style("margin-top:14px")
 
                 def on_slider(e):
-                    if abs(e.value - state["setpoint"]) < 0.05:
-                        return
-                    if not unlocked():
+                    if not unlocked() or abs(e.value - state["setpoint"]) < 0.05:
                         return
                     touch()
-                    slider_edit["value"], slider_edit["t"] = round(e.value, 1), time.time()
+                    edit["v"], edit["t"] = round(e.value, 1), time.time()
                 slider = ui.slider(min=0, max=max_hz, step=0.1, value=round(state["setpoint"], 1),
                                    on_change=on_slider).props("color=amber label-always").style("margin-top:30px")
+
+            def flush_slider():
+                if edit["v"] is not None and time.time() - edit["t"] > SLIDER_PAUSE:
+                    hz, edit["v"] = edit["v"], None
+                    edit["t"] = time.time()
+                    send("freq", f"изменение уставки {hz:.1f} Гц", hz)
 
             with ui.element("div").classes("m-grid"):
                 cur_box = ui.html("").classes("card")
@@ -200,11 +272,21 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
         def refresh():
             s = state
             u = unlocked()
+            v = _viewers.get(cid)
+            if v is None:
+                v = _viewers[cid] = {"ip": ip, "device": dev, "since": time.time(), "seen": 0, "unlocked": False}
+            v["seen"], v["unlocked"] = time.time(), u
             lock_card.set_visibility(not u)
             ctl_card.set_visibility(u)
+            stop_btn.set_visibility(u or not STOP_NEEDS_PIN)
+            if u and (s["mode"] in ("ВПЕРЁД", "РЕВЕРС") or s["freq"] > 0.05):
+                touch()                              # пока двигатель крутится, СТОП должен оставаться доступным
             if u:
-                left_lbl.set_text(f"автоблокировка через {int(ctl['until'] - time.time())} с")
-                if s["link"] and slider_edit["value"] is None and last_sp["v"] != s["setpoint"]:
+                left_lbl.set_text("автоблокировка отключена, пока двигатель работает"
+                                  if (s["mode"] in ("ВПЕРЁД", "РЕВЕРС") or s["freq"] > 0.05)
+                                  else f"автоблокировка через {int(ctl['until'] - time.time())} с")
+                idle = edit["v"] is None and time.time() - edit["t"] > 3
+                if s["link"] and idle and last_sp["v"] != s["setpoint"]:
                     slider.value = round(s["setpoint"], 1); last_sp["v"] = s["setpoint"]
             opc_lbl.set_content(link_html()); hb_lbl.set_content(hb_html())
             if not s["link"]:
@@ -236,3 +318,4 @@ def register(css, port, state, trend_f, trend_i, events, link_html, hb_html, C,
                 f'<span class="dot" style="background:{col}"></span>{m}</div>' for t, m, col in events))
         refresh()
         ui.timer(1.0, refresh)
+        ui.timer(0.3, flush_slider)
