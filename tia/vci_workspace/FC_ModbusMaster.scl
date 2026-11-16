@@ -25,7 +25,7 @@ BEGIN
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40001;
 	            "DB_MB_RTU_MasterConfig".DATA_LEN := 2;
-	            //{2} чтение регистров кода ошибок ( регистр 0090h - 0092h)       
+	            //{2} чтение регистров кода ошибок ( регистр 0014h)       
 	        "ReadAlarm":
 	            "DB_MB_RTU_MasterConfig".MODE := 0;
 	            "DB_MB_RTU_MasterConfig".DATA_ADDR := 40021;

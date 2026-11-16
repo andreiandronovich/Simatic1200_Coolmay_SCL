@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from nicegui import app, ui
 from asyncua import Client, ua
+from drive_alarms import alarm_text, alarm_symbol  
 
 DEMO = False
 URL = "opc.tcp://192.168.1.2:4840"
@@ -152,7 +153,8 @@ class Drive:
     async def start(self):
         r = await self.regs()
         if r[11] != 0:
-            log(f"Отказ: авария {r[11]}, сначала сброс", RED); return
+             log(f"Пуск запрещён: {alarm_text(r[11])}", RED)
+             return
         if r[0] & 2 and to_float(r[3], r[4]) > 0.5:
             log("Пуск: сначала СТОП и дождитесь остановки", RED); return
         if to_float(r[1], r[2]) > MAX_HZ:
@@ -162,7 +164,8 @@ class Drive:
     async def reverse(self):
         r = await self.regs()
         if r[11] != 0:
-            log(f"Отказ: авария {r[11]}, сначала сброс", RED); return
+             log(f"Пуск запрещён: {alarm_text(r[11])}", RED)
+             return
         if r[0] & 1 or to_float(r[3], r[4]) > 0.5:
             log("Реверс: сначала СТОП и дождитесь остановки", RED); return
         await self.write_reg(0, CMD_REV); log("Пуск назад", AMBER)
@@ -244,7 +247,15 @@ async def ticker():
         s = state
         trend_f.append(round(s["freq"], 2)); trend_i.append(round(s["current"], 2))
         if s["alarm"] != last_alarm:
-            log(f"Авария {s['alarm']}" if s["alarm"] else "Авария снята", RED if s["alarm"] else GREEN)
+            if s["alarm"] != 0:
+                log(
+                    f"Состояние привода [{s['alarm']}]: "
+                    f"{alarm_text(s['alarm'])}",
+                    RED,
+                )
+            else:
+                log("Ошибки и предупреждения сняты", GREEN)
+
             last_alarm = s["alarm"]
         if s["link"]:
             active = s["freq"] > 0.05 or s["mode"] in ("ВПЕРЁД", "РЕВЕРС")
@@ -303,6 +314,8 @@ def index():
             hb_lbl = ui.html("").style("font-size:14px")
             ui.button("⚙  ПАРАМЕТРЫ", on_click=lambda: ui.navigate.to("/settings")) \
                 .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:10px")
+            ui.button("ИСТОРИЯ", on_click=lambda: ui.navigate.to("/history")) \
+                .style(f"background:{BORDER}!important;color:{TXT};font-weight:700;border-radius:10px")
 
     with ui.element("div").classes("grid3"):
         with ui.element("div").classes("card"):
@@ -351,6 +364,10 @@ def index():
             cur_lbl = ui.html("").style("width:100%")
             vol_lbl = ui.html("").style("width:100%")
             alm_lbl = ui.html("").style("width:100%")
+            alm_desc = ui.label("").style(
+                f"color:{DIM};font-size:13px;"
+                "line-height:1.4;white-space:normal"
+            )
             acc_lbl = ui.html("").style("width:100%")
             dec_lbl = ui.html("").style("width:100%")
 
@@ -389,13 +406,21 @@ def index():
         elif s["mode"] == "ВПЕРЁД":
             mode_lbl.set_text("ВПЕРЁД"); mode_lbl.style(f"background:#14301f;color:{GREEN};border:1px solid {GREEN}")
         elif s["mode"] == "СТОП":
-            mode_lbl.set_text("СТОП"); mode_lbl.style(f"background:#2a1519;color:{RED};border:1px solid {RED}")
+            mode_lbl.set_text("СТОП"); mode_lbl.style(f"background:#2a1519;color:{RED};border:1px solid {RED}") 
         else:
             mode_lbl.set_text(s["mode"]); mode_lbl.style(f"background:#2a2415;color:{AMBER};border:1px solid {AMBER}")
         cur_lbl.set_content(row("Ток", f"{s['current']:.2f}", PURPLE, "А"))
         vol_lbl.set_content(row("Напряжение", f"{s['voltage']:.1f}", BLUE, "В"))
-        alm_lbl.set_content(row("Авария", "нет" if s["alarm"] == 0 else f"код {s['alarm']}",
-                                GREEN if s["alarm"] == 0 else RED))
+        alm_lbl.set_content(
+            row(
+                "Ошибка / статус",
+                alarm_symbol(s["alarm"]),
+                GREEN if s["alarm"] == 0 else RED,
+            )
+        )
+        alm_desc.set_text(
+            "" if s["alarm"] == 0 else alarm_text(s["alarm"])
+        )
         acc_lbl.set_content(row("Разгон", fmt_t(s["acc"]), AMBER, "с", "mid"))
         dec_lbl.set_content(row("Торможение", fmt_t(s["dec"]), AMBER, "с", "mid"))
         trend.options["xAxis"]["data"] = list(range(-len(trend_f) + 1, 1))
@@ -470,5 +495,9 @@ def settings():
                                 f'<span class="unit">с</span>')
     refresh()
     ui.timer(1.0, refresh)
-
+    
+import history_page
+history_page.register(CSS, HISTORY_DIR, link_html,
+                      dict(BG=BG, CARD=CARD, BORDER=BORDER, TXT=TXT, DIM=DIM, GREEN=GREEN,
+                           RED=RED, BLUE=BLUE, AMBER=AMBER, PURPLE=PURPLE))
 ui.run(title="Привод", host="127.0.0.1", port=8080, dark=True, reload=False)

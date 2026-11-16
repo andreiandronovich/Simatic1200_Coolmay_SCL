@@ -197,6 +197,9 @@ BEGIN
 	                "alarm_CTER":
 	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_CTER");
 	                    EXIT;
+	                "alarm_FBL":
+	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_FBL");
+	                    EXIT;
 	                "alarm_ES":
 	                    "DB_MB_TCP_ServerConfig".HoldingReg[11] := INT_TO_WORD("alarm_ES");
 	                    EXIT;
